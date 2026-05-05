@@ -2,6 +2,21 @@
 
 ## 经验启发式校准记录（避免被早期 GNN 数字误导）
 
+### Spec 与代码常数同步纪律（2026-05-05，Checkpoint 7 lesson）
+
+- **现象**：Phase 3 launch spec 写"Time2Vec 32 + EdgeType one-hot 25 → concat 57"，但 Q-1 mini-checkpoint 后 EdgeType 实际增至 29（加 3 USER_* + UNKNOWN），concat 维度应为 61 而非 57。这是 spec 与代码常数 drift 的一例。
+- **正确做法（Checkpoint 7 已执行）**：**显式跟随代码现实，不 silent 按 spec 写死 25**。具体落地：
+  1. 代码用 `_N_EDGE_TYPES = len(EdgeType)`（动态读取，不写死）
+  2. Hydra config 注释里说明 61 = 32 + 29
+  3. Commit message 显式标注 "EdgeType one-hot dim 修正 25 → 29"
+  4. Module docstring 里说明 launch spec 假设过时 + 代码以 enum 实际成员数为准
+  5. 单元测试 `test_edge_type_one_hot_uses_29_dim` 锁定该值，未来 EdgeType 扩到 30 时该测试会主动 fail 提醒更新
+- **错误做法（绝不允许）**：silent 把残差 MLP 输入维度按 25 写死，等运行时 shape mismatch 报错才发现，然后偷偷修补。
+- **后续阶段适用范围**：剩余九个 phase 还会出现"代码现实领先于 launch spec"的常数 drift（典型场景：节点类型从 5 类扩到 6 类、156 个 special token 调整、20 个 RAPA 模板增减、7 个 SOTA 基线变化等）。**所有此类 drift 必须显式 RFC 而非 silent 跟随**——同步动作四处一致（代码 / 测试 / config / docs）+ commit message 显式记录是标准范式。
+- **判定原则**："代码即真相"（code as ground truth），spec 是意图陈述但代码常数随实施演化。Drift 不是问题，silent drift 才是问题。
+
+
+
 - **"每 window 10–10000 events 的合理区间"启发式不适用于 LogHetero / 现代 HGT**（2026-05-05 标记，Checkpoint 4 数据后校准）。
   - 来源：launch spec 引用的早期 GNN 经验，对应 GraphSAGE / GAT 在小图（< 10k edges）上训练的样本规模感。
   - LogHetero 现实：ATLAS 每 1 小时 window 含 16k–200k events，对应子图（per-event K-hop=2、max_nodes=128）规模 100–500 节点 / 100–1000 边，一次 forward 在 RTX 4090 上亚秒级。

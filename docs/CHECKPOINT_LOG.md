@@ -197,4 +197,37 @@
 
 ---
 
-*下一条记录：Phase 3 / Checkpoint 8 (TGN-style 节点记忆，仅 process/socket，GRU update，batched，epoch-bounded 持久化)。*
+## Checkpoint 8 — Phase 3.3 HeteroTGNMemory (PyG TGNMemory composed per process/socket)
+
+- **完成日期**：2026-05-05
+- **Commit**：（本次 commit；hash 在 git log 可见）
+- **核心交付物**：
+  - `src/loghetero/models/graph/tgn_memory.py`：`HeteroTGNMemory(num_nodes_per_type, memory_dim=256, time_dim=32, raw_msg_dim=64, memory_node_types=(process, socket))`。组合一个 PyG `TGNMemory` 实例 per memory node type；`update_state(dst_type, src, dst, t, raw_msg)` 异构路由：dst_type 不在 memory_node_types 时**silent no-op**；`forward(n_id_dict)` 异构 lookup 仅返回 memory types 对应 entries（非 memory types 不在输出 dict 中而非返回零张量——absence is informative）；`detach()` / `reset_state()` 转发到所有 per-type TGNMemory。
+  - **PyG-TGN-Memory 适配明细**（写在 module-level docstring，Phase 12 Methods 章节素材）：reuse zero-modification = `TGNMemory` + `IdentityMessage` + `LastAggregator`；contributions = per-type 实例化 + heterogeneous routing on update + heterogeneous lookup + epoch-bounded 持久化协议。
+  - `tests/test_tgn_memory.py`：9 测试，user-required 三条全部覆盖：
+    1. **Toy 5-step regression**: 单 process 节点 5 步事件链 + 训练 200 epoch 后 MSE < 0.5（实测 ~0 收敛）
+    2. **Detach validation 双反例**：without-detach 第 2 batch backward 触发 `RuntimeError(Trying to backward through the graph...)` 反例；with-detach 3 batch 顺利推进正例
+    3. **Heterogeneity routing 三测试**：non-memory dst_type update 是 no-op (process memory 不变)；lookup 跳过 file/network/user；`has_memory()` 接口正确
+  - 标准覆盖：reset_state zeros memory；zero node count 类型 graceful handling；`test_uses_pyg_tgnmemory_internally` 验证内部确实是 PyG `TGNMemory` (Phase 12 evidence)。
+- **关键 metric**：
+  - 测试：**164 / 164 全绿**（155 prior + 9 new TGN memory）；TGN memory tests 8.28s wall（含 toy regression 200 epoch 训练）
+  - ruff + mypy clean (42 src files)
+  - 玩具回归测试 final loss < 0.5（充分小，验证 GRU 在 5 步事件链上学到 event-count evolution）
+- **决策点**：
+  - **PyG TGNMemory 直接复用 + heterogeneous wrapper 路径**：避免 fork 或 reimplement，保留 PyG 的 detach / reset_state 已 battle-tested 行为；contributions 集中在 routing layer。
+  - **PyG `t` dtype = Long 不是 Float**：discovery during testing；测试统一用 `torch.tensor([k], dtype=torch.long)`。Phase 9 主 HTGN 模块需要在调用 update_state 前把 ns 时间戳除以 NS_PER_HOUR 后再 cast 到 long（即"小时为单位的整数 timestep"）。
+  - **0-node memory type graceful skip**：socket 在 ATLAS 全 16 host 都是 0（v0.1-data 现实），构造时如果 num_nodes_per_type[socket]=0 就 skip 实例化；Phase 9 调用 update_state("socket", ...) 仍然是 silent no-op。DARPA TC E3 数据到达后 socket 数量非零，重新构造即可。
+  - **memory absent vs zero**：lookup 对非 memory type 的 dst 不返回任何东西（不是返回 zeros）。caller 必须显式判断 `if ntype in mem_dict`，不能 silently `+ zeros`——absence 是 informative signal。
+  - **type: ignore 4 处**（mypy ModuleDict[str, Module] vs TGNMemory 类型擦除问题）：可接受 workaround，所有 ignore 都附 inline comment 说明原因。
+- **新增 known_issues**：无新条目；Checkpoint 7 lesson "Spec 与代码常数同步纪律" 在本 checkpoint 同样适用（PyG t 必须 Long 是又一个 spec-vs-code-reality 的例子）。
+- **PROGRESS.md / CHECKPOINT_LOG.md 更新**：本 commit 同时整体覆写 PROGRESS.md（Phase 3 进行中 2/4，commit chain 至 #19）+ 追加本条 CHECKPOINT_LOG.md 记录。
+- **执行 Checkpoint 8 launch spec 完成清单**：
+  - [x] 玩具时序图 5 步事件链回归测试 loss 收敛（< 0.5）
+  - [x] 记忆更新 detach 策略验证（反例 + 正例双覆盖）
+  - [x] PyG TGNMemory API 对齐说明（module-level docstring + 显式 reuse / contribution 划分）
+  - [x] Heterogeneity invariant: non-memory types neither read nor update memory（3 测试）
+  - [x] PROGRESS.md / CHECKPOINT_LOG.md 同步更新
+
+---
+
+*下一条记录：Phase 3 / Checkpoint 9 (HTGN 主模块组装，3 层堆叠 + 层间 γ 衰减，输出 dict[NodeType, Tensor[*, 256]])。*

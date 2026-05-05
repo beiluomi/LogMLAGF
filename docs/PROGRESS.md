@@ -6,16 +6,15 @@
 
 ## 1. 项目当前阶段与 Checkpoint
 
-- **当前 Phase**：Phase 3（HTGN 异构时序图神经网络，**创新点 1 核心**）— **进行中（Checkpoint 7 / 4 已完成）**
-- **最新 Checkpoint**：Checkpoint 7（Phase 3.1 + 3.2 Time2Vec + HGT layer wrapper with Option-C 残差）— 已通过本地验证
-- **Phase 3 进度**：1/4 sub-checkpoints 完成。下一个：Checkpoint 8（TGN-style 节点记忆）。
+- **当前 Phase**：Phase 3（HTGN 异构时序图神经网络，**创新点 1 核心**）— **进行中（2/4 sub-checkpoints 已完成）**
+- **最新 Checkpoint**：Checkpoint 8（Phase 3.3 HeteroTGNMemory）— 已通过本地验证
+- **Phase 3 进度**：Checkpoint 7（Time2Vec + HGT layer Option-C）+ Checkpoint 8（TGN memory）已 done。下一个：Checkpoint 9（HTGN 主模块组装）→ Checkpoint 10（玩具图分类 + ATLAS 链路预测预热 AUC > 0.85 硬门槛）→ tag `v0.3-htgn`。
 - **已完成 Phase**：Phase 0（tag `v0.0-scaffold`）+ Phase 1（tag `v0.1-data`）+ Phase 2（tag `v0.2-bert`）
-- **下一阶段**：Phase 3 余下 Checkpoint 8 / 9 / 10，然后 tag `v0.3-htgn` 完成 Phase 3。
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：（本 commit；Checkpoint 7 单 commit 含 Time2Vec + HGT layer + Hydra config + RFC docs）
-- **Message**：`feat(htgn): Phase 3 / Checkpoint 7 Time2Vec + HGT layer wrapper (Option-C residual per RFC)`
+- **Hash**：（本 commit；Checkpoint 8 单 commit 含 HeteroTGNMemory + 9 测试 + Hydra config 已存在 + lesson 文档）
+- **Message**：`feat(htgn): Phase 3 / Checkpoint 8 HeteroTGNMemory (PyG TGNMemory composed per process/socket)`
 - **Date**：2026-05-05
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
@@ -39,44 +38,43 @@
 | 15 | `227bfcf` | checkpoint 6 | feat(bert): Phase 2 BERT text encoder + sanity check |
 | 16 | `5002aab` | docs | docs(known_issues): add Phase 12 论文素材 entry for BERT cos-sim finding |
 | 17 | `d4681ad` | merge / tag v0.2-bert | merge: Phase 2 BERT text encoder integration (1 commit) |
-| 18 | `<this commit>` | checkpoint 7 | feat(htgn): Phase 3 / Checkpoint 7 Time2Vec + HGT layer wrapper (Option-C residual per RFC) |
+| 18 | `6a1f39a` | checkpoint 7 | feat(htgn): Phase 3 / Checkpoint 7 Time2Vec + HGT layer wrapper (Option-C residual per RFC) |
+| 19 | `<this commit>` | checkpoint 8 | feat(htgn): Phase 3 / Checkpoint 8 HeteroTGNMemory (PyG TGNMemory composed per process/socket) |
 
-## 4. 已生效的决策清单（决策 1–9 + Phase 3 设计偏离记录）
+## 4. 已生效的决策清单（决策 1–9 + Phase 3 设计偏离 + 经验启发式校准）
 
-详见 `docs/design_decisions.md` 完整论证；下方仅一行简述。
+详见 `docs/design_decisions.md` + `docs/known_issues.md` 完整论证。
 
 1. **决策 1** — 不复现任何已有论文作为方法主线
 2. **决策 2** — 两条创新点精确措辞 + verified 先验工作
 3. **决策 3** — 双盲匿名化策略
-4. **决策 4** — 工程不变量（BERT 冻结 / HTGN day 1 / 双向跨模态 day 1 / 对比学习端到端 / 模块化）
-   - **4.2 footnote (新增)**：Phase 11 消融 B5 实施细节，`residual_alpha=0` + `tgn_memory.enabled=false` 双开关组合
+4. **决策 4** — 工程不变量；4.2 footnote：Phase 11 ablation B5 = `residual_alpha=0` + `tgn_memory.enabled=false` 双 yaml 开关
 5. **决策 5** — DARPA TC E3 CDM → 5 类节点映射
 6. **决策 6** — Leave-one-attack-out + 时间窗 final = 1.0h
 7. **决策 7** — AI 协作披露策略
 8. **决策 8** — 孤立节点保留策略
 9. **决策 9** — 训练样本单位 = (target_event, subgraph_at_target, label) 三元组
 
-**Phase 3 设计偏离记录**（见 `docs/known_issues.md`）：
-- **HGTConv edge_attr 接口限制 + Option C 残差通道决议**（Checkpoint 7 RFC）：PyG 2.7 HGTConv 不支持 edge_attr，user 拍板 Option C 走残差通道。`y_dst = HGTConv(x) + α · scatter_add(MLP(time2vec || edge_type_onehot))`，α=0.5 固定不学习。
+**Phase 3 设计偏离记录**（`docs/known_issues.md`）：HGTConv edge_attr 接口限制 + Option C 残差通道决议（Checkpoint 7 RFC）。
+
+**经验启发式校准记录**（`docs/known_issues.md`）：(a) 早期 GNN [10, 10000] events/window heuristic 不适用；(b) **Spec 与代码常数同步纪律**——Checkpoint 7 lesson，EdgeType 25→29 drift 处理标准范式（代码即真相 / 四处同步 / commit 显式记录）。
 
 ## 5. 下一步预期工作
 
-**Checkpoint 8（Phase 3.3）：TGN-style 节点记忆**，预计 1.5 天。所有设计参数 user 已锁定：
-- 仅 process / socket 两类节点（state-bearing entities）有 memory，file/network/user 无
-- 维度 256 与 HTGN hidden_dim 对齐
-- GRU 更新（不要 LSTM）
-- batched 更新粒度（不要 per-event）
-- 同 epoch 同 (host, scenario) 内跨 window 持久，epoch 边界 reset
-- 初始 memory zero
-- `tgn_memory.enabled=false` 是 Phase 11 ablation B5 switch #2
+**Checkpoint 9（Phase 3.4）：HTGN 主模块组装**，预计 2 天。所有设计参数 user 已在 Phase 3 launch spec 锁定：
 
-**Checkpoint 8 报告必须包含**：玩具时序图 5 步事件链 memory 演化测试；记忆 detach 策略验证（避免梯度跨 batch 泄漏）；与 PyG TGNMemory API 对齐说明（PyG TGNMemory 是同构设计，我们扩展到异构必须确保只 process/socket 触发 memory lookup）。
+- 3 层堆叠（PyG HGT 经验值，再多过拟合）
+- 每层结构 [Time2Vec 边编码 → HGTConv → 记忆更新（仅 process/socket，调用 HeteroTGNMemory）→ 残差 + LayerNorm]
+- 层间 γ 衰减 [1.0, 0.7, 0.4]（GraphSAGE 衰减实践）
+- 输出格式 `dict[NodeType, Tensor[num_nodes_of_type, 256]]` 供 Phase 4 跨模态注意力使用
 
-**之后**：Checkpoint 9（HTGN 主模块组装）+ Checkpoint 10（玩具图分类 + ATLAS 链路预测预热 AUC > 0.85 硬门槛）→ tag `v0.3-htgn`。
+**Checkpoint 9 报告必须包含**：完整 HTGN forward 在 ATLAS 子图上的 shape + 时间测量（128 节点子图 RTX 4090 < 50ms forward）；端到端梯度回传验证（Time2Vec / HGT / TGN memory 三套参数全部收梯度）；总参数量 + 显存占用（batch=32）用于 Phase 7 batch size 估算。
+
+**之后**：Checkpoint 10（玩具图分类 + ATLAS 链路预测预热 AUC > 0.85 硬门槛）→ tag `v0.3-htgn`。
 
 ## 6. 当前 Active 待回答问题
 
-无（Checkpoint 7 RFC 已 closed by user 拍板 Option C；Checkpoint 8 所有参数已预锁定）。
+无（Checkpoint 9 所有参数已 launch-spec 锁定，无 RFC 触发预期）。
 
 ## 7. 快速复现指令
 
@@ -91,19 +89,19 @@ uv sync --extra dev --extra ml      # ~5 min cold install
 make lint test                       # ruff + mypy + pytest（非 integration），<10s
 make integration-test                # pytest -m integration（含 BERT 加载，~60s）
 
-# Phase 1 数据流水线复现（v0.1-data tag 完整）
+# Phase 1 数据流水线复现（v0.1-data tag）
 bash scripts/download_atlas.sh                          # ~2 min
-uv run python scripts/verify_data_integrity.py          # 校验 manifest 幂等
-uv run python scripts/parse_atlas_all.py --workers 8    # 全量解析 ~40s
-uv run python scripts/build_atlas_graphs.py --workers 8 # 异构图构建 ~55s
+uv run python scripts/verify_data_integrity.py
+uv run python scripts/parse_atlas_all.py --workers 8    # ~40s
+uv run python scripts/build_atlas_graphs.py --workers 8 # ~55s
 uv run python scripts/build_window_density_histograms.py --workers 8
-uv run python scripts/build_fold_stats_report.py        # leave-one-out fold 统计
-uv run python scripts/tokenizer_nn_sanity.py            # tokenizer NN sanity
-uv run python scripts/check_synonym_init.py             # SYNONYM_INIT regression（exit 0）
+uv run python scripts/build_fold_stats_report.py
+uv run python scripts/tokenizer_nn_sanity.py
+uv run python scripts/check_synonym_init.py             # exit 0
 
-# Phase 2 BERT 集成验证（v0.2-bert tag 完整）
-uv run python scripts/bert_sanity_check.py              # BERT NN sanity on real ATLAS
+# Phase 2 BERT 集成（v0.2-bert tag）
+uv run python scripts/bert_sanity_check.py
 
-# Phase 3 Checkpoint 7 验证（current branch）
-uv run pytest tests/test_time2vec.py tests/test_hgt_layer.py -v
+# Phase 3 模块单元测试（current branch）
+uv run pytest tests/test_time2vec.py tests/test_hgt_layer.py tests/test_tgn_memory.py -v
 ```
