@@ -1,0 +1,40 @@
+{
+  "device": "cuda",
+  "target_nodes": 128,
+  "actual_total_nodes": 128,
+  "nodes_per_type": {
+    "process": 21,
+    "file": 107,
+    "socket": 0,
+    "network": 0,
+    "user": 0
+  },
+  "forward_median_ms": 29.571075923740864,
+  "forward_target_ms": 50.0,
+  "forward_hard_limit_ms": 100.0,
+  "vram_peak_gb": 0.191375732421875,
+  "vram_hard_limit_gb": 4.0,
+  "batch_size": 32,
+  "parameter_breakdown": {
+    "time2vec": 64,
+    "hgt_internal": 4193415,
+    "residual_mlp": 61824,
+    "tgn_memory": 665152,
+    "layer_norm": 7680,
+    "msg_projection": 16448,
+    "total": 4944583
+  },
+  "config": {
+    "hidden_dim": 256,
+    "n_layers": 3,
+    "num_heads": 8,
+    "time2vec_dim": 32,
+    "residual_alpha": 0.5,
+    "layer_decay_gamma": [
+      1.0,
+      0.7,
+      0.4
+    ],
+    "raw_msg_dim": 64
+  }
+}

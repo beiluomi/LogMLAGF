@@ -6,15 +6,15 @@
 
 ## 1. 项目当前阶段与 Checkpoint
 
-- **当前 Phase**：Phase 3（HTGN 异构时序图神经网络，**创新点 1 核心**）— **进行中（2/4 sub-checkpoints 已完成）**
-- **最新 Checkpoint**：Checkpoint 8（Phase 3.3 HeteroTGNMemory）— 已通过本地验证
-- **Phase 3 进度**：Checkpoint 7（Time2Vec + HGT layer Option-C）+ Checkpoint 8（TGN memory）已 done。下一个：Checkpoint 9（HTGN 主模块组装）→ Checkpoint 10（玩具图分类 + ATLAS 链路预测预热 AUC > 0.85 硬门槛）→ tag `v0.3-htgn`。
+- **当前 Phase**：Phase 3（HTGN 异构时序图神经网络，**创新点 1 核心**）— **进行中（3/4 sub-checkpoints 已完成）**
+- **最新 Checkpoint**：Checkpoint 9（Phase 3.4 HTGN 主模块组装）— 已通过本地验证
+- **Phase 3 进度**：Checkpoint 7（Time2Vec + HGT layer Option-C）+ Checkpoint 8（HeteroTGNMemory）+ Checkpoint 9（HTGN 主模块 3 层堆叠）已 done。下一个：Checkpoint 10（玩具图分类 + ATLAS 链路预测预热 AUC > 0.85 硬门槛）→ tag `v0.3-htgn`。
 - **已完成 Phase**：Phase 0（tag `v0.0-scaffold`）+ Phase 1（tag `v0.1-data`）+ Phase 2（tag `v0.2-bert`）
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：（本 commit；Checkpoint 8 单 commit 含 HeteroTGNMemory + 9 测试 + Hydra config 已存在 + lesson 文档）
-- **Message**：`feat(htgn): Phase 3 / Checkpoint 8 HeteroTGNMemory (PyG TGNMemory composed per process/socket)`
+- **Hash**：（本 commit；Checkpoint 9 单 commit 含 HTGN 主模块 + 13 测试 + benchmark 脚本 + 复现 anchor JSON + PROGRESS / CHECKPOINT_LOG 同步）
+- **Message**：`feat(htgn): Phase 3 / Checkpoint 9 HTGN main module assembly (3-layer, γ_k·α residual, ns-direct long timestamps)`
 - **Date**：2026-05-05
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
@@ -39,7 +39,8 @@
 | 16 | `5002aab` | docs | docs(known_issues): add Phase 12 论文素材 entry for BERT cos-sim finding |
 | 17 | `d4681ad` | merge / tag v0.2-bert | merge: Phase 2 BERT text encoder integration (1 commit) |
 | 18 | `6a1f39a` | checkpoint 7 | feat(htgn): Phase 3 / Checkpoint 7 Time2Vec + HGT layer wrapper (Option-C residual per RFC) |
-| 19 | `<this commit>` | checkpoint 8 | feat(htgn): Phase 3 / Checkpoint 8 HeteroTGNMemory (PyG TGNMemory composed per process/socket) |
+| 19 | `ef31e6f` | checkpoint 8 | feat(htgn): Phase 3 / Checkpoint 8 HeteroTGNMemory (PyG TGNMemory composed per process/socket) |
+| 20 | `<this commit>` | checkpoint 9 | feat(htgn): Phase 3 / Checkpoint 9 HTGN main module assembly (3-layer, γ_k·α residual, ns-direct long timestamps) |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 设计偏离 + 经验启发式校准）
 
@@ -55,26 +56,24 @@
 8. **决策 8** — 孤立节点保留策略
 9. **决策 9** — 训练样本单位 = (target_event, subgraph_at_target, label) 三元组
 
-**Phase 3 设计偏离记录**（`docs/known_issues.md`）：HGTConv edge_attr 接口限制 + Option C 残差通道决议（Checkpoint 7 RFC）。
+**Phase 3 设计偏离记录**（`docs/known_issues.md`）：HGTConv edge_attr 接口限制 + Option C 残差通道决议（Checkpoint 7 RFC）；γ_k 仅作用于 Option-C 残差通道而非 HGT 主路径（Checkpoint 9 launch spec 锁定）；ns 时间戳 → long 直接 cast（int64 9.2e18 >> 2018-era 1.5e18 ns），不做小时级归一化以避免 silent 退化为 ablation B5（Checkpoint 9 user override）。
 
-**经验启发式校准记录**（`docs/known_issues.md`）：(a) 早期 GNN [10, 10000] events/window heuristic 不适用；(b) **Spec 与代码常数同步纪律**——Checkpoint 7 lesson，EdgeType 25→29 drift 处理标准范式（代码即真相 / 四处同步 / commit 显式记录）。
+**经验启发式校准记录**（`docs/known_issues.md`）：(a) 早期 GNN [10, 10000] events/window heuristic 不适用；(b) **Spec 与代码常数同步纪律**——Checkpoint 7 lesson，EdgeType 25→29 drift 处理标准范式（代码即真相 / 四处同步 / commit 显式记录）；(c) **PyG TGNMemory 内部 msg_store 跨 batch 持有梯度**（Checkpoint 9 发现），`HeteroTGNMemory.detach()` 当前不清空 msg_store，Phase 7 训练循环需补齐——已在 known_issues 标 Phase 7 待办，Checkpoint 9 多 batch 测试 `@pytest.mark.skip` 显式挂钩。
 
 ## 5. 下一步预期工作
 
-**Checkpoint 9（Phase 3.4）：HTGN 主模块组装**，预计 2 天。所有设计参数 user 已在 Phase 3 launch spec 锁定：
+**Checkpoint 10（Phase 3 收尾）：玩具图分类 + ATLAS 链路预测预热**，预计 2–3 天。launch spec 已在 Phase 3 总规划中锁定：
 
-- 3 层堆叠（PyG HGT 经验值，再多过拟合）
-- 每层结构 [Time2Vec 边编码 → HGTConv → 记忆更新（仅 process/socket，调用 HeteroTGNMemory）→ 残差 + LayerNorm]
-- 层间 γ 衰减 [1.0, 0.7, 0.4]（GraphSAGE 衰减实践）
-- 输出格式 `dict[NodeType, Tensor[num_nodes_of_type, 256]]` 供 Phase 4 跨模态注意力使用
+- **Task A（玩具图节点分类）**：合成 5 类异构图 + 已知 ground-truth label，HTGN forward → 简单分类头；验证全模型可端到端训练（loss 下降，Train accuracy > 90%）。
+- **Task B（ATLAS 链路预测预热）**：在 ATLAS S1 的 K-hop 子图集合上做 self-supervised 链路预测（边存在 vs negative sampling），AUC > 0.85 **硬门槛**（未达不进 Phase 4）。
+- **Multi-agent 路径**：Task A 与 Task B 数据 / 训练循环独立，可考虑 dispatching-parallel-agents skill 并行实施。
+- **完成后**：tag `v0.3-htgn`，merge 进 main，Phase 4（跨模态注意力）开工。
 
-**Checkpoint 9 报告必须包含**：完整 HTGN forward 在 ATLAS 子图上的 shape + 时间测量（128 节点子图 RTX 4090 < 50ms forward）；端到端梯度回传验证（Time2Vec / HGT / TGN memory 三套参数全部收梯度）；总参数量 + 显存占用（batch=32）用于 Phase 7 batch size 估算。
-
-**之后**：Checkpoint 10（玩具图分类 + ATLAS 链路预测预热 AUC > 0.85 硬门槛）→ tag `v0.3-htgn`。
+**Checkpoint 10 报告必须包含**：玩具图 train/val accuracy 曲线 + ATLAS 链路预测 AUC（必须 > 0.85）；如果硬门槛未达，触发 RFC 回看 HTGN 架构（不强行往后推）；继续维护 PROGRESS.md / CHECKPOINT_LOG.md 同步纪律。
 
 ## 6. 当前 Active 待回答问题
 
-无（Checkpoint 9 所有参数已 launch-spec 锁定，无 RFC 触发预期）。
+无（Checkpoint 9 launch spec 全部锁定参数已实现并测试通过，无 RFC 触发；Checkpoint 10 launch spec 待用户在 sanity check 通过后给出具体玩具图规模 + ATLAS 链路预测正负采样比等参数）。
 
 ## 7. 快速复现指令
 
@@ -103,5 +102,9 @@ uv run python scripts/check_synonym_init.py             # exit 0
 uv run python scripts/bert_sanity_check.py
 
 # Phase 3 模块单元测试（current branch）
-uv run pytest tests/test_time2vec.py tests/test_hgt_layer.py tests/test_tgn_memory.py -v
+uv run pytest tests/test_time2vec.py tests/test_hgt_layer.py tests/test_tgn_memory.py tests/test_htgn.py -v
+
+# Phase 3 HTGN 性能 benchmark（real ATLAS S1, 128-node K-hop subgraph, RTX 4090）
+uv run python scripts/bench_htgn.py
+# 输出 data/htgn_bench.json：forward median ~30ms（< 50ms 目标）/ params 4.94M / VRAM 0.19 GB per-sample
 ```

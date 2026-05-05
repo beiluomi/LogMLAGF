@@ -94,6 +94,16 @@ y_dst[v] = HGTConv(x_dict)[v] + α · sum_{(u,v) ∈ E_r} MLP(concat(time2vec(t_
 
 ## Phase 12 论文素材
 
+### Contribution-boundary 设计原则（2026-05-05，Checkpoint 8 lesson）
+
+两条可在 Methods 章节"Section 4.x How we adapt PyG TGNMemory to heterogeneous provenance graphs"段落直接引用的设计模式：
+
+1. **Absent-vs-zero 语义**：异构 wrapper 在 lookup 时对 non-memory node types **不返回零张量**，而是让 caller 显式判断 `if ntype in output_dict`。理由：absence 本身就是 informative signal，silent 返回零会让上层模块误以为"这个类型有 memory 但都是零"——掩盖架构假设的 caller 错误使用。该原则在 `loghetero.models.graph.tgn_memory.HeteroTGNMemory.forward` 强制；Phase 4 跨模态注意力 caller 必须遵循。论文里这条作为"strict separation between configured node types and zero embeddings"的 contribution evidence。
+
+2. **`uses_pyg_X_internally` introspection 测试模式**：为每个"我们 wrap PyG / Hugging Face / etc. base machinery"的模块，写一条 introspection 测试断言内部确实是被 wrapped 的标准类。例如 `tests/test_tgn_memory.py::test_uses_pyg_tgnmemory_internally` 用 `isinstance(tgn, PyG.TGNMemory)` 锁定我们的 contribution 是 wrapper layer 而非重写。论文 Methods 里"What we reuse vs what we add" 明细可以直接引用这些测试名作为 evidence。同样模式应用于 Phase 4 跨模态 attention（wrap BERT layer）+ Phase 5 RAPA（wrap MITRE STIX parser）+ Phase 8 baselines（wrap KAIROS / MAGIC / FLASH 官方 code）。
+
+
+
 - **BERT 在 ATLAS 真实日志上 cos-sim 0.97-1.00 的强语义聚合**（2026-05-05 标记，由 Phase 2 / Checkpoint 6 sanity check 引发）。`scripts/bert_sanity_check.py` 在 ATLAS S1 / 600 events 上验证：benign DNS query top-5 NN 全是其他 DNS query (cos-sim 0.97-1.00)；noteworthy file_access top-5 NN 全是同模式 file_access (cos-sim 1.00)。
   - **论文 Methods 章节素材**：这一结果从经验上验证了 "不做 DAPT 也能用 bert-base-uncased 直接 forward 进入 LogHetero 联合预训练" 的工程决策正确性（决策 4.1 BERT 默认冻结）。Cleaner + 156 special token 的 placeholder 重写让 BERT 编码器对系统日志有合理语义抽取能力，**省去了几小时-几天的 DAPT 预训练**。
   - **Phase 12 写作要点**：放在 Methods 章节"4.x Text encoder design"段，作为我们选择 frozen BERT-base + cleaner-driven placeholder 这个工程组合的"empirical validation" 段落论据。可附 cos-sim 数字 + 一两个 NN retrieval 例（"DNS query → DNS query"、"file_access → file_access"）作为 figure。
