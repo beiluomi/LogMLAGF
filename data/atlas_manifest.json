@@ -1,0 +1,360 @@
+{
+  "dataset": "ATLAS",
+  "source": "https://github.com/purseclab/ATLAS",
+  "citation": "Alsaheel et al., USENIX Security '21",
+  "expected_scenarios": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6"
+  ],
+  "missing_scenarios": [],
+  "checksum_protocol": "sha256 + bytes + lines (README publishes no sha256, so sha256 is locally computed and serves as a downstream reproducibility anchor; primary equality check is bytes + lines per docs/known_issues.md)",
+  "generated_at_utc": "2026-05-05T09:57:57+00:00",
+  "scenarios": {
+    "S1": {
+      "file_count": 3,
+      "files": [
+        {
+          "path": "logs/dns",
+          "bytes": 209700,
+          "lines": 1368,
+          "sha256": "10976e27b24b98ba1e12d32e6156c0420bca09a4043c99b1af6a04c792f4f4ac"
+        },
+        {
+          "path": "logs/firefox.txt",
+          "bytes": 334978551,
+          "lines": 3000757,
+          "sha256": "e9ea8d2695c59b9a6cdc367f473113a476566c32e9e820713c187d31805114cf"
+        },
+        {
+          "path": "logs/security_events.txt",
+          "bytes": 65164278,
+          "lines": 2222647,
+          "sha256": "2cddea2a90a0aa85620e4d50a105394ce6a58f616404a4d7df42ab7dcee22176"
+        }
+      ]
+    },
+    "S2": {
+      "file_count": 3,
+      "files": [
+        {
+          "path": "logs/dns",
+          "bytes": 431290,
+          "lines": 2844,
+          "sha256": "8bdac44c04bd77bcf12cf6dadc7c54da022929669859ecf95a14d7cdc08cc6a4"
+        },
+        {
+          "path": "logs/firefox.txt",
+          "bytes": 789615055,
+          "lines": 6925311,
+          "sha256": "4ff16f2b7d35abf1cec3ed2e02a7b1e1358504407d6f046103906ffadb17835b"
+        },
+        {
+          "path": "logs/security_events.txt",
+          "bytes": 274226144,
+          "lines": 9217756,
+          "sha256": "15bb889f8218810e941ba8e49fdcaaa1c1393e5dee335e0fd9e13c59a0b854d6"
+        }
+      ]
+    },
+    "S3": {
+      "file_count": 3,
+      "files": [
+        {
+          "path": "logs/dns",
+          "bytes": 320633,
+          "lines": 2236,
+          "sha256": "3fa91dd3eb5d4a7c19b3c144c9b0847262c0505de724617d37db62573317e862"
+        },
+        {
+          "path": "logs/firefox.txt",
+          "bytes": 455639563,
+          "lines": 4126119,
+          "sha256": "2e4d311db63a7a9ee53ab0cba402e0ff17737a9caf7f60b1a18d4d7bf7d8b9e8"
+        },
+        {
+          "path": "logs/security_events.txt",
+          "bytes": 91332792,
+          "lines": 3125782,
+          "sha256": "fed1888b6d43ee2b1bed88f019833e25a221fe23ee2e2632d630124794e04842"
+        }
+      ]
+    },
+    "S4": {
+      "file_count": 3,
+      "files": [
+        {
+          "path": "logs/dns",
+          "bytes": 276190,
+          "lines": 1878,
+          "sha256": "f92fd001ac43880930b3a105b76728353eabee6d3effd499c5a8f79aa869c578"
+        },
+        {
+          "path": "logs/firefox.txt",
+          "bytes": 380587522,
+          "lines": 3402183,
+          "sha256": "9a7faf61397b836882d852c0d36b8c57f232538bc4ecc5279ce0fae70a1025fc"
+        },
+        {
+          "path": "logs/security_events.txt",
+          "bytes": 88937422,
+          "lines": 3034687,
+          "sha256": "eca90a856a429bebf889c0d8902336b9045e7b4f0d02be213dd125a1185b5d96"
+        }
+      ]
+    },
+    "M1": {
+      "file_count": 6,
+      "files": [
+        {
+          "path": "h1/logs/dns",
+          "bytes": 1072236,
+          "lines": 3546,
+          "sha256": "3bf046db19ad0097fc23c3a7819e5ec09123099c08a4c2731b9a571501bc6d62"
+        },
+        {
+          "path": "h1/logs/firefox.txt",
+          "bytes": 661211095,
+          "lines": 5817684,
+          "sha256": "1e4f9de79f0c0801934798732b8edfd85725f5c0db67262105c4a0fe98cf1608"
+        },
+        {
+          "path": "h1/logs/security_events.txt",
+          "bytes": 82380020,
+          "lines": 2797259,
+          "sha256": "2fd819e75596f3ec1289dcce05e2cf537606d3b7666184d0467e5e5ba6b2dcb3"
+        },
+        {
+          "path": "h2/logs/dns",
+          "bytes": 1142486,
+          "lines": 3688,
+          "sha256": "0f3046d57dbe1029c70dbd7c9475490f7295050b1bcef6df93f9d9b01639b783"
+        },
+        {
+          "path": "h2/logs/firefox.txt",
+          "bytes": 8098742,
+          "lines": 69490,
+          "sha256": "9506cb69b8ffba80572ab544703dc069a8c23ea6f522cc3352ac014ed6bb9c17"
+        },
+        {
+          "path": "h2/logs/security_events.txt",
+          "bytes": 97361365,
+          "lines": 3359985,
+          "sha256": "cf03927966df85d667de4a78cc6e122c75963c8aef9d0aaa5d128aa446b72156"
+        }
+      ]
+    },
+    "M2": {
+      "file_count": 6,
+      "files": [
+        {
+          "path": "h1/logs/dns",
+          "bytes": 1067718,
+          "lines": 3800,
+          "sha256": "19a3893e491964c204be80b47e4249d0538980be336461f2388727524876fb33"
+        },
+        {
+          "path": "h1/logs/firefox.txt",
+          "bytes": 598620964,
+          "lines": 5243174,
+          "sha256": "c9f8eeab91571fb0ea3cd05588bf1f2ab385b93abf1751b2aebf1c670906b72f"
+        },
+        {
+          "path": "h1/logs/security_events.txt",
+          "bytes": 103697799,
+          "lines": 3533968,
+          "sha256": "fe6c109aa9f329767cc47ea754332530c70f26c1bda19d1b932baa113aec3491"
+        },
+        {
+          "path": "h2/logs/dns",
+          "bytes": 1181340,
+          "lines": 4080,
+          "sha256": "2c383d5cc68fa9c4413cf1968d4737840d4d9f50d4429b24590f7b20206c6231"
+        },
+        {
+          "path": "h2/logs/firefox.txt",
+          "bytes": 9630142,
+          "lines": 82176,
+          "sha256": "3fabaa0d191e5ed8d3216de36e352b4a735a20a3e86d1ff9d5e4db9603eee244"
+        },
+        {
+          "path": "h2/logs/security_events.txt",
+          "bytes": 105645731,
+          "lines": 3638052,
+          "sha256": "cca0480b6d8f07d4538bc81f1cea60b1d9232fb7fd07a22a14a8b29e076314c7"
+        }
+      ]
+    },
+    "M3": {
+      "file_count": 6,
+      "files": [
+        {
+          "path": "h1/logs/dns",
+          "bytes": 384194,
+          "lines": 1126,
+          "sha256": "f9521361b1c7fc87c04c3baa8e4b04aba1fbaebc60f941bf39f53ad2dab28783"
+        },
+        {
+          "path": "h1/logs/firefox.txt",
+          "bytes": 252131857,
+          "lines": 2226508,
+          "sha256": "a7dcf8b24d7f47d6035a4f737509cb0d7b86ac542db9c070ff4bf4cef5b24d04"
+        },
+        {
+          "path": "h1/logs/security_events.txt",
+          "bytes": 99700206,
+          "lines": 3440687,
+          "sha256": "f43074057ac2250afa8049cd816e4e071fdf8dd1729df56ac08a39f291d39c8b"
+        },
+        {
+          "path": "h2/logs/dns",
+          "bytes": 546725,
+          "lines": 1800,
+          "sha256": "76a9249d1bd06ad7b6ca7036c4e4fca153db3e52fa6c9c78b6da06a7addbc3e0"
+        },
+        {
+          "path": "h2/logs/firefox.txt",
+          "bytes": 9432675,
+          "lines": 80571,
+          "sha256": "d38cb37a9ec02b5ff7701e6d0decd82f16207a8bb742ad39ba6da86f447bd697"
+        },
+        {
+          "path": "h2/logs/security_events.txt",
+          "bytes": 134442505,
+          "lines": 4731791,
+          "sha256": "28bfb1bcada433b13f1b45bc51ea0b1e89fbbf97eef274d2e72a9ee3ae2851f3"
+        }
+      ]
+    },
+    "M4": {
+      "file_count": 6,
+      "files": [
+        {
+          "path": "h1/logs/dns",
+          "bytes": 458137,
+          "lines": 2186,
+          "sha256": "57d5595f1f0de4920c8d655a4e08637904dab0a82233e921953f1426f51b8570"
+        },
+        {
+          "path": "h1/logs/firefox.txt",
+          "bytes": 456330202,
+          "lines": 4124466,
+          "sha256": "84fdecbcfedf1750067c35ecd908c78f6dc7fd8d38944bd21a3188b9ec6971f3"
+        },
+        {
+          "path": "h1/logs/security_events.txt",
+          "bytes": 101942391,
+          "lines": 3491473,
+          "sha256": "df57112cc4da312af9c99ec501c0599300179cc99ab1101ce4b6ecdc009cd3d0"
+        },
+        {
+          "path": "h2/logs/dns",
+          "bytes": 452361,
+          "lines": 1526,
+          "sha256": "2bdc89f4269c6de0ebbecde0a15faef5ec6d9bd0ef3d49097f34a8b8a018cbde"
+        },
+        {
+          "path": "h2/logs/firefox.txt",
+          "bytes": 8054390,
+          "lines": 69169,
+          "sha256": "d7d798283222e563122ea673a2b741fdfc7f00d26a1abd256102eaf0a21bd43d"
+        },
+        {
+          "path": "h2/logs/security_events.txt",
+          "bytes": 86364584,
+          "lines": 2982710,
+          "sha256": "b72a008372e2a1c081b5363f13b02eb03618c1c6482b7b037a7d3d7569dac841"
+        }
+      ]
+    },
+    "M5": {
+      "file_count": 6,
+      "files": [
+        {
+          "path": "h1/logs/dns",
+          "bytes": 596292,
+          "lines": 3454,
+          "sha256": "808834a5bf0859f588b127b61e3112d0635777e9890b0ad7473111961aa55cb8"
+        },
+        {
+          "path": "h1/logs/firefox.txt",
+          "bytes": 363216441,
+          "lines": 3133517,
+          "sha256": "48280d4a53744dc69b08865885c08fff0f639b1f591fc0fb4a934c8fdb776429"
+        },
+        {
+          "path": "h1/logs/security_events.txt",
+          "bytes": 396468411,
+          "lines": 14002291,
+          "sha256": "8acbce922476465c1246adc4b1d919b1597f176005acd4592a118177df274d5a"
+        },
+        {
+          "path": "h2/logs/dns",
+          "bytes": 586009,
+          "lines": 3394,
+          "sha256": "067f479798401e2aeff34628527ce61ec95abf2cd6903b5da2447b7b354a5829"
+        },
+        {
+          "path": "h2/logs/firefox.txt",
+          "bytes": 23940165,
+          "lines": 211013,
+          "sha256": "bbe36c171e3dbab004673ce2e9d09a9be082f534ffe3f175e036715d578e6847"
+        },
+        {
+          "path": "h2/logs/security_events.txt",
+          "bytes": 93197415,
+          "lines": 3194686,
+          "sha256": "15d00c2faa0c687391c3012db6572ecd27065d8f6df06194daa997e5916d86f9"
+        }
+      ]
+    },
+    "M6": {
+      "file_count": 6,
+      "files": [
+        {
+          "path": "h1/logs/dns",
+          "bytes": 564062,
+          "lines": 2530,
+          "sha256": "41881f9611f1b0c2e9f254d4fd226d78f11d4f60364082267c16622332f99eb0"
+        },
+        {
+          "path": "h1/logs/firefox.txt",
+          "bytes": 464693600,
+          "lines": 4207374,
+          "sha256": "18139594523fc20e1bccdbe5cd1a772a4ce2c2931e91d62fcb952fa138f0bd23"
+        },
+        {
+          "path": "h1/logs/security_events.txt",
+          "bytes": 111530203,
+          "lines": 3823124,
+          "sha256": "301ac16afcce3be7960f6155f21f85546c37f78f86e1d9f7068616f0957960ee"
+        },
+        {
+          "path": "h2/logs/dns",
+          "bytes": 1078959,
+          "lines": 3392,
+          "sha256": "897612fe8d1f04b77900648fcdb5844d40682793e88c1d2744b252194fe52eff"
+        },
+        {
+          "path": "h2/logs/firefox.txt",
+          "bytes": 11180928,
+          "lines": 95019,
+          "sha256": "3576e7f19fa1c1ef3ce9885652adff701f1799580426f065b68cb2dd40fe1933"
+        },
+        {
+          "path": "h2/logs/security_events.txt",
+          "bytes": 135910242,
+          "lines": 4790849,
+          "sha256": "42b727322c0791d01865614ecd20231c1319b0f30ed26ccb3621ce3cfb34df42"
+        }
+      ]
+    }
+  }
+}
