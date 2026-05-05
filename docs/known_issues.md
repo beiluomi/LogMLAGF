@@ -48,6 +48,14 @@
   - **检测方法**：Phase 4 attention 可视化里画一组 "downloaded payload → executed via Process Create" 的 case study；如果攻击杀伤链频繁缺这一段，说明需要扩展 firefox 解析。
   - **如果触发**：扩展 `parsers/atlas.py::FirefoxParser` 加 `_FIREFOX_DOWNLOAD_RE` 与 `_FIREFOX_DNS_RE` pattern，提取 download URL → cache2 file path 与 DNS module 解析事件。
 
+## Phase 8 待办
+
+- **`AtlasGroundTruthLabelLoader` 实现**（2026-05-05 标记，由 Checkpoint 5 引发）。当前 `src/loghetero/data/datamodule.py::benign_only_label_loader` 是 Phase 1.6 stub（所有 event 返回 0），Phase 8 finetune_anomaly mode 需要真实标签。实施步骤：
+  1. 解析 ATLAS `paper_experiments/{S1, S2, S3, S4, M1, ..., M6}/output/scenario_file_testing_preprocessed_logs_*` 与 `eval_seq_graph_*.json` 提取**攻击实体清单**（attack entities = list of file paths / process names / IPs / domains 涉及攻击）。注：ATLAS 论文未发布 ground-truth attack-entity sets 的官方文件，需基于 README 例（如 S1 的 `["0xalsaheel.com", "aalsahee/index.html", "192.168.223.3", "payload.exe"]`）+ paper Table I 重建。
+  2. 实现 `src/loghetero/data/label_loaders.py::AtlasGroundTruthLabelLoader`：构造时加载所有 scenario 的攻击实体集，`__call__(event)` 返回 1 if `event.subject ∈ entities or event.obj ∈ entities` else 0。
+  3. DataModule 构造时通过 `label_loader=AtlasGroundTruthLabelLoader(scenarios=[...])` 替换 stub。
+  4. 配套测试：fixture 含已知攻击实体 + 标签验证；fold stats 重新跑确认 attack count 列从 0 变成实际数字。
+
 ## Phase 12 待核实（写 related work 前必须 resolve）
 
 - **Threatrace 与 ATT&CK 强关联性核实**（2026-05-05 标记，由决策 2 Innovation 2 prior work 引发）。Threatrace (Wang et al., NDSS '22) 据印象主要是用 GraphSAGE 做 provenance graph 上的 node-level 异常检测，**不一定显式使用 ATT&CK 模板**。Phase 12 写 related work 时按以下流程处理：
