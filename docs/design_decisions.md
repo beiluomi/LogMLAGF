@@ -131,6 +131,86 @@
 
 ---
 
+## 决策 5：DARPA TC E3 CDM → 5 类节点映射规则
+
+**决定（2026-05-05，回应 Q2）。** 把 DARPA TC E3 CDM schema 的全部节点类型映射到 LogHetero 的 5 类异构节点（process / file / socket / network / user）。映射表如下，**写死在 `src/loghetero/data/parsers/darpa_e3.py` 的 `_CDM_NODE_TYPE_MAP` 常量**，不允许在 Phase 1+ 的代码中分散硬编码。
+
+| CDM 类型              | LogHetero 节点类型 | 备注                                              |
+|-----------------------|-------------------|---------------------------------------------------|
+| Subject (Process)     | process           |                                                   |
+| Principal             | user              |                                                   |
+| FileObject            | file              |                                                   |
+| UnnamedPipeObject     | **file**          | 与 KAIROS / MAGIC / FLASH 对齐（关键，见下方论证） |
+| MemoryObject          | file              | 共享内存按文件语义处理                              |
+| SrcSinkObject         | socket            | generic source/sink，多数为 IPC                    |
+| NetFlowObject         | network           |                                                   |
+| Event                 | （边，不是节点）   | Event 承载操作类型与时间戳，不参与节点类型           |
+| 未列出的边缘类型      | file（兜底）       | 同时计入 `docs/known_issues.md` 待审               |
+
+### UnnamedPipeObject → file 的论证（Q2 修正了 Phase 0 报告里的默认）
+
+1. **PIDS 文献一致性**：KAIROS (S&P'24) / MAGIC (USENIX Sec'24) / FLASH (NDSS'24) 三篇主要基线都把 pipe 当 file 处理。我们要和它们公平对比就必须保持一致。
+2. **语义同构**：pipe 的访问语义是 `read` / `write`，与 file 同构；与 socket 的 `connect` / `send` / `recv` 异构。
+3. **Audit 日志 fd 行为**：pipe 的 file descriptor 在内核审计日志中表现为文件式 IO（与普通 file 走同一套系统调用）。
+
+### Phase 8 基线一致性原则
+
+如果 Phase 8 跑某个基线时发现该基线把 pipe 处理成别的类型（例如 ProvDetector 或 Unicorn），**立即停下来在 PR 中提出，由项目所有者裁定**。原则：所有对比方法在数据预处理层共享同一映射表，不许各自为政——任何映射调整必须在本表统一更新，不能在基线代码里 patch。
+
+---
+
+## 决策 6：Leave-One-Attack-Out 切分协议（host + time-window 联合）
+
+**决定（2026-05-05，回应 Q3）。** ATLAS 10 个攻击场景的评测严格走 leave-one-attack-out 协议，**良性背景流量按 (host_id, time_window) 二元组联合切分**——同一主机 + 同一时间窗的良性事件不允许同时出现在 train 与 test。
+
+### 论证（reviewer 可审计的标准）
+
+KAIROS (S&P'24) 与 MAGIC (USENIX Sec'24) 都明确批评过 ATLAS 原作切分协议存在**良性数据泄漏**：原协议只按攻击场景切，但同一主机的良性流量在 train / test 间共享，模型可以学到"主机指纹"而非异常模式。LogHetero 的协议把 `(host, time-window)` 当成最小切分单元，杜绝这种泄漏。
+
+### 具体协议
+
+- **目标场景**：被 leave-out 的那 1 个 attack scenario 作为 test 集，包含其攻击事件与该场景内所有良性背景流量。
+- **训练良性池**：从其他 9 个 scenario 中按 `(host_id, time_window)` 二元组联合采样良性事件。
+- **不变量**：对于任意一对 `(host_id, time_window)`，其全部良性事件要么完全进 train，要么完全进 test，不允许跨集泄漏。
+- **不变量校验**：`src/loghetero/data/datamodule.py` 在 `setup` 时必须 `assert` 这一条件，违反则 fail-fast。
+- **时间窗粒度（initial）**：**1 小时**——足够细切出足够多窗口，又足够粗避免事件碎片化。
+
+### Phase 1 数据流水线跑起来后再回看的事项
+
+时间窗粒度 1 小时是初值。Phase 1 跑通后须输出每个 scenario 的事件密度直方图（events / hour 分布），由项目所有者审视后决定是否调整：
+
+- 事件稀疏的 scenario 可能拉到 4 小时；
+- 事件密集的 scenario 可能压到 30 分钟。
+
+调整时**所有 scenario 必须用同一粒度**——不能逐 scenario 调，否则评测协议本身变成不可比的混合体。统一粒度的最终值在 Phase 1.6 完成时回写本节。
+
+---
+
+## 决策 7：AI 协作披露策略（commit `Co-Authored-By`）
+
+**决定（2026-05-05，回应 Q5）。** 开发期所有 commit 保留 `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` 末尾行；投稿前由匿名化流水线统一处理。
+
+### 论证
+
+1. **学术诚信透明性**：AI 协作披露是正确做法；commit history 本身就是一份天然的 audit trail，比事后撰写披露段落更可信。
+2. **匿名化兼容**：Phase 12 `git filter-repo + .mailmap` 流水线会把所有作者邮箱（包括 Claude 的 noreply 地址）统一重写为 `anonymous-loghetero <anonymous@anonymous.invalid>`，不构成双盲投稿障碍。
+3. **顶会要求对齐**：NeurIPS / ICML / USENIX 等近期都明确要求披露 AI 使用。保留 `Co-Authored-By` 是最低成本的合规方式。
+
+### 实施
+
+- **开发期**：所有由 Claude Code 创建的 commit 自动追加 `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`。
+- **项目所有者手工 commit**：自由选择是否追加（手工劳动不强制，但建议保持一致）。
+- **Phase 12 匿名化镜像**：`scripts/anonymize_repo.sh` 调用 `git filter-repo --mailmap mailmap.anon`，把所有人——包括 Claude——重写为同一匿名身份。投稿仓库的 commit history 不包含任何可识别信息（人或 AI）。
+- **Mailmap 模板（Phase 12 会生成）**：
+
+  ```text
+  anonymous-loghetero <anonymous@anonymous.invalid> <zbyangyangyang@gmail.com>
+  anonymous-loghetero <anonymous@anonymous.invalid> <noreply@anthropic.com>
+  ```
+
+---
+
 ## 修订历史
 
 - **2026-05-05** — 初版（v0.0-scaffold）：决策 1–4 写入。
+- **2026-05-05** — 第一次扩展：决策 5（CDM 节点映射）、6（Leave-One-Attack-Out 协议）、7（AI 协作披露策略）写入；回应 Q1–Q5。
