@@ -1,0 +1,35 @@
+# Phase 1.5 / Phase 1.6 ATLAS data config (shared between window-density
+# script, subgraph sampler, and the upcoming Phase 1.6 DataModule).
+#
+# Hard rule (per Checkpoint 4 launch spec): the values below MUST be
+# referenced as Hydra parameters by every consumer; nothing in any .py
+# file may hardcode "1 hour" / "50 nodes" / "2 hops". Adjusting the
+# eventual decision-6 time-window granularity is a yaml-only edit.
+
+data_dir: data/raw/atlas
+manifest: data/atlas_manifest.json
+
+# Time-window bucketing for decision-6 leave-one-attack-out splitting.
+# time_window_hours initial is 1.0; the final value is pinned by the
+# project owner after reviewing the Checkpoint 4 16+1 histograms.
+window:
+  time_window_hours: 1.0
+
+# Heterogeneous K-hop subgraph sampling (Phase 1.5 sub-task 1.5/1.6).
+# Each "target event" yields one (text_input, hetero_subgraph) tuple.
+# Edges in the candidate frontier are scored by combining edge-weight
+# (count of same (subject, op, obj) triple in the window) and time
+# recency to the target event; the top-`max_nodes` are kept.
+subgraph:
+  max_nodes: 50
+  khop: 2
+  edge_ranking: joint  # one of: weight | time_recency | joint
+
+# Granularity sweep used by build_window_density_histograms.py to populate
+# the Checkpoint 4 decision table; the project owner reads this table to
+# pick the final time_window_hours.
+granularity_sweep_hours:
+  - 0.5
+  - 1.0
+  - 2.0
+  - 4.0

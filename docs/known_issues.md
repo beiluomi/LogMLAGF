@@ -1,5 +1,21 @@
 # Known Issues
 
+## Phase 1.2 修订记录（避免被误读为退步）
+
+- **Q-1 mini-checkpoint commit `246ee95` 中 -8,143 success / +8,143 skipped 的语义**：refactor SecurityEventsParser 为 per-EventID extractor pattern 的副产物——发现旧 code 在 4663 / 4656 / 4658 / 4660 / 4690 等 file-handle 事件 body 缺失 `Process Name` 字段时，会 fallback 用 `Account Name` 当作 process subject。这导致 Checkpoint 3 提交的 ATLAS 图里有约 8,143 条 `(account_name as process) → file` 的语义错误边藏着——账户名被错误当成进程节点参与图构建。新 extractor 在 Process Name 缺失时返回 None（skipped，不是 failed）。**这是 graph quality 的明显改进，不是数据丢失**。Phase 8 跑基线时不会再以"基线效果异常"的形式暴露这个 bug。
+
+  - 数字解读：success 总数从 2,745,528 → 2,737,385，差 8,143 条事件；这 8,143 条全部转入 skipped（不是 failed）。
+  - 影响范围：仅 ATLAS（DARPA TC E3 CDM 用 UUID 寻址，不会有这种 fallback 错配）。
+  - 不需要回退：旧的有问题数据已被新 manifest + summary 覆盖（commit `246ee95` 同时更新了 `data/atlas_parse_summary.json` 与 `data/atlas_graph_summary.json`）。
+
+## ATLAS user 类节点数量偏低（Phase 12 Limitation 素材）
+
+- **观察（Q-1 mini-checkpoint 后落实）**：ATLAS 主数据集 16 (scenario, host) pair 的 user 节点共 70 个（每 host 1-5 个），远小于直觉预期的"几十到几百"。
+- **原因（数据集本身特征，非 dispatch 漏报）**：4624 在 ATLAS 几乎全是 LogonType=5 (Service)，被 Q-1 spec 的 {3, 9, 10} 过滤器排除（这是 desired 行为，Type 5 是 baseline noise）；4625 (Logon Failure) 在全部 16 host **完全为零**（grep 验证）；4648 (Explicit Credentials) 也极罕见。ATLAS 是 controlled lab attack scenarios，不是真实企业环境，logon 多样性自然偏低。
+- **架构一致性已达成**：5 类异构节点中 4 类（process / file / network / user）在 ATLAS 全部 16 host 非零；仅 socket 等 DARPA TC E3 Principal/SrcSink。Phase 11 消融 B4 对照"5 类异构 → 1 类同构 GAT"成立。
+- **DARPA TC E3 / Phase 9 跨数据集验证将丰富该类**：CDM Principal 节点天然填充 user 类，且 4625 等价的失败认证事件在 E3 数据中存在。
+- **Phase 12 论文 Limitation 章节素材**："ATLAS dataset's logon-event diversity is limited; the user-node story is more cleanly demonstrated on DARPA TC E3 (Phase 9 cross-dataset generalisation)."
+
 ## Phase 1.2 已 resolve
 
 - ~~**M5 h1 `security_events.txt` 数量级是否为真实攻击密集**~~ — **RESOLVED 2026-05-05 (Checkpoint 2)**。EventID 直方图对比确认 M5 h1 是**真实攻击密集**：

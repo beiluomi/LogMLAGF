@@ -158,6 +158,10 @@
 2. **语义同构**：pipe 的访问语义是 `read` / `write`，与 file 同构；与 socket 的 `connect` / `send` / `recv` 异构。
 3. **Audit 日志 fd 行为**：pipe 的 file descriptor 在内核审计日志中表现为文件式 IO（与普通 file 走同一套系统调用）。
 
+### ATLAS user-node 数量脚注（2026-05-05，Q-1 mini-checkpoint）
+
+11-EventID dispatch 在 ATLAS 16 (scenario, host) 上产生 70 个 user 节点（详见 `docs/known_issues.md` 同标题条目）。这是 ATLAS 数据集本身的客观特征——4624 几乎全是 LogonType=5 (Service) 噪声、4625 全为零、4648 罕见——**不是 dispatch 漏报**。架构一致性目标已达成（5 类节点中 4 类在主数据集非零，仅 socket 等 DARPA TC E3）。Phase 12 论文 Limitation 章节将明确说明 user-node 故事在 DARPA TC E3 cross-dataset evaluation (Phase 9) 上更完整地呈现。
+
 ### Phase 8 基线一致性原则
 
 如果 Phase 8 跑某个基线时发现该基线把 pipe 处理成别的类型（例如 ProvDetector 或 Unicorn），**立即停下来在 PR 中提出，由项目所有者裁定**。原则：所有对比方法在数据预处理层共享同一映射表，不许各自为政——任何映射调整必须在本表统一更新，不能在基线代码里 patch。

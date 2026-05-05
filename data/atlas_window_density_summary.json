@@ -1,0 +1,699 @@
+{
+  "generated_at_utc": "2026-05-05T13:09:59+00:00",
+  "granularities_hours": [
+    0.5,
+    1.0,
+    2.0,
+    4.0
+  ],
+  "per_host": [
+    {
+      "scenario": "M1",
+      "host": "M1_h1",
+      "n_events": 124754,
+      "stats": {
+        "0.5h": {
+          "n_events": 124754.0,
+          "n_nonempty": 4.0,
+          "mean": 31188.5,
+          "median": 30489.0,
+          "p99": 63636.0,
+          "max": 63636.0,
+          "min_nonzero": 140.0
+        },
+        "1.0h": {
+          "n_events": 124754.0,
+          "n_nonempty": 3.0,
+          "mean": 41584.666666666664,
+          "median": 39169.0,
+          "p99": 85445.0,
+          "max": 85445.0,
+          "min_nonzero": 140.0
+        },
+        "2.0h": {
+          "n_events": 124754.0,
+          "n_nonempty": 2.0,
+          "mean": 62377.0,
+          "median": 62377.0,
+          "p99": 85445.0,
+          "max": 85445.0,
+          "min_nonzero": 39309.0
+        },
+        "4.0h": {
+          "n_events": 124754.0,
+          "n_nonempty": 2.0,
+          "mean": 62377.0,
+          "median": 62377.0,
+          "p99": 85445.0,
+          "max": 85445.0,
+          "min_nonzero": 39309.0
+        }
+      }
+    },
+    {
+      "scenario": "M1",
+      "host": "M1_h2",
+      "n_events": 135798,
+      "stats": {
+        "0.5h": {
+          "n_events": 135798.0,
+          "n_nonempty": 6.0,
+          "mean": 22633.0,
+          "median": 21608.5,
+          "p99": 38830.0,
+          "max": 38830.0,
+          "min_nonzero": 84.0
+        },
+        "1.0h": {
+          "n_events": 135798.0,
+          "n_nonempty": 3.0,
+          "mean": 45266.0,
+          "median": 56932.0,
+          "p99": 63065.0,
+          "max": 63065.0,
+          "min_nonzero": 15801.0
+        },
+        "2.0h": {
+          "n_events": 135798.0,
+          "n_nonempty": 2.0,
+          "mean": 67899.0,
+          "median": 67899.0,
+          "p99": 78866.0,
+          "max": 78866.0,
+          "min_nonzero": 56932.0
+        },
+        "4.0h": {
+          "n_events": 135798.0,
+          "n_nonempty": 2.0,
+          "mean": 67899.0,
+          "median": 67899.0,
+          "p99": 78866.0,
+          "max": 78866.0,
+          "min_nonzero": 56932.0
+        }
+      }
+    },
+    {
+      "scenario": "M2",
+      "host": "M2_h1",
+      "n_events": 148045,
+      "stats": {
+        "0.5h": {
+          "n_events": 148045.0,
+          "n_nonempty": 4.0,
+          "mean": 37011.25,
+          "median": 29115.0,
+          "p99": 89225.0,
+          "max": 89225.0,
+          "min_nonzero": 590.0
+        },
+        "1.0h": {
+          "n_events": 148045.0,
+          "n_nonempty": 3.0,
+          "mean": 49348.333333333336,
+          "median": 38973.0,
+          "p99": 108482.0,
+          "max": 108482.0,
+          "min_nonzero": 590.0
+        },
+        "2.0h": {
+          "n_events": 148045.0,
+          "n_nonempty": 2.0,
+          "mean": 74022.5,
+          "median": 74022.5,
+          "p99": 108482.0,
+          "max": 108482.0,
+          "min_nonzero": 39563.0
+        },
+        "4.0h": {
+          "n_events": 148045.0,
+          "n_nonempty": 2.0,
+          "mean": 74022.5,
+          "median": 74022.5,
+          "p99": 108482.0,
+          "max": 108482.0,
+          "min_nonzero": 39563.0
+        }
+      }
+    },
+    {
+      "scenario": "M2",
+      "host": "M2_h2",
+      "n_events": 142502,
+      "stats": {
+        "0.5h": {
+          "n_events": 142502.0,
+          "n_nonempty": 6.0,
+          "mean": 23750.333333333332,
+          "median": 20467.5,
+          "p99": 47418.0,
+          "max": 47418.0,
+          "min_nonzero": 3048.0
+        },
+        "1.0h": {
+          "n_events": 142502.0,
+          "n_nonempty": 3.0,
+          "mean": 47500.666666666664,
+          "median": 63065.0,
+          "p99": 63238.0,
+          "max": 63238.0,
+          "min_nonzero": 16199.0
+        },
+        "2.0h": {
+          "n_events": 142502.0,
+          "n_nonempty": 2.0,
+          "mean": 71251.0,
+          "median": 71251.0,
+          "p99": 79264.0,
+          "max": 79264.0,
+          "min_nonzero": 63238.0
+        },
+        "4.0h": {
+          "n_events": 142502.0,
+          "n_nonempty": 2.0,
+          "mean": 71251.0,
+          "median": 71251.0,
+          "p99": 79264.0,
+          "max": 79264.0,
+          "min_nonzero": 63238.0
+        }
+      }
+    },
+    {
+      "scenario": "M3",
+      "host": "M3_h1",
+      "n_events": 144730,
+      "stats": {
+        "0.5h": {
+          "n_events": 144730.0,
+          "n_nonempty": 4.0,
+          "mean": 36182.5,
+          "median": 31319.5,
+          "p99": 81027.0,
+          "max": 81027.0,
+          "min_nonzero": 1064.0
+        },
+        "1.0h": {
+          "n_events": 144730.0,
+          "n_nonempty": 3.0,
+          "mean": 48243.333333333336,
+          "median": 52731.0,
+          "p99": 90935.0,
+          "max": 90935.0,
+          "min_nonzero": 1064.0
+        },
+        "2.0h": {
+          "n_events": 144730.0,
+          "n_nonempty": 2.0,
+          "mean": 72365.0,
+          "median": 72365.0,
+          "p99": 90935.0,
+          "max": 90935.0,
+          "min_nonzero": 53795.0
+        },
+        "4.0h": {
+          "n_events": 144730.0,
+          "n_nonempty": 2.0,
+          "mean": 72365.0,
+          "median": 72365.0,
+          "p99": 90935.0,
+          "max": 90935.0,
+          "min_nonzero": 53795.0
+        }
+      }
+    },
+    {
+      "scenario": "M3",
+      "host": "M3_h2",
+      "n_events": 200379,
+      "stats": {
+        "0.5h": {
+          "n_events": 200379.0,
+          "n_nonempty": 6.0,
+          "mean": 33396.5,
+          "median": 19011.5,
+          "p99": 112996.0,
+          "max": 112996.0,
+          "min_nonzero": 1008.0
+        },
+        "1.0h": {
+          "n_events": 200379.0,
+          "n_nonempty": 4.0,
+          "mean": 50094.75,
+          "median": 38490.5,
+          "p99": 112996.0,
+          "max": 112996.0,
+          "min_nonzero": 10402.0
+        },
+        "2.0h": {
+          "n_events": 200379.0,
+          "n_nonempty": 3.0,
+          "mean": 66793.0,
+          "median": 76981.0,
+          "p99": 112996.0,
+          "max": 112996.0,
+          "min_nonzero": 10402.0
+        },
+        "4.0h": {
+          "n_events": 200379.0,
+          "n_nonempty": 3.0,
+          "mean": 66793.0,
+          "median": 76981.0,
+          "p99": 112996.0,
+          "max": 112996.0,
+          "min_nonzero": 10402.0
+        }
+      }
+    },
+    {
+      "scenario": "M4",
+      "host": "M4_h1",
+      "n_events": 148720,
+      "stats": {
+        "0.5h": {
+          "n_events": 148720.0,
+          "n_nonempty": 4.0,
+          "mean": 37180.0,
+          "median": 31538.5,
+          "p99": 62722.0,
+          "max": 62722.0,
+          "min_nonzero": 22921.0
+        },
+        "1.0h": {
+          "n_events": 148720.0,
+          "n_nonempty": 3.0,
+          "mean": 49573.333333333336,
+          "median": 36183.0,
+          "p99": 85643.0,
+          "max": 85643.0,
+          "min_nonzero": 26894.0
+        },
+        "2.0h": {
+          "n_events": 148720.0,
+          "n_nonempty": 2.0,
+          "mean": 74360.0,
+          "median": 74360.0,
+          "p99": 85643.0,
+          "max": 85643.0,
+          "min_nonzero": 63077.0
+        },
+        "4.0h": {
+          "n_events": 148720.0,
+          "n_nonempty": 2.0,
+          "mean": 74360.0,
+          "median": 74360.0,
+          "p99": 85643.0,
+          "max": 85643.0,
+          "min_nonzero": 63077.0
+        }
+      }
+    },
+    {
+      "scenario": "M4",
+      "host": "M4_h2",
+      "n_events": 120009,
+      "stats": {
+        "0.5h": {
+          "n_events": 120009.0,
+          "n_nonempty": 6.0,
+          "mean": 20001.5,
+          "median": 21190.0,
+          "p99": 37950.0,
+          "max": 37950.0,
+          "min_nonzero": 92.0
+        },
+        "1.0h": {
+          "n_events": 120009.0,
+          "n_nonempty": 4.0,
+          "mean": 30002.25,
+          "median": 21646.5,
+          "p99": 63065.0,
+          "max": 63065.0,
+          "min_nonzero": 13651.0
+        },
+        "2.0h": {
+          "n_events": 120009.0,
+          "n_nonempty": 2.0,
+          "mean": 60004.5,
+          "median": 60004.5,
+          "p99": 76716.0,
+          "max": 76716.0,
+          "min_nonzero": 43293.0
+        },
+        "4.0h": {
+          "n_events": 120009.0,
+          "n_nonempty": 2.0,
+          "mean": 60004.5,
+          "median": 60004.5,
+          "p99": 76716.0,
+          "max": 76716.0,
+          "min_nonzero": 43293.0
+        }
+      }
+    },
+    {
+      "scenario": "M5",
+      "host": "M5_h1",
+      "n_events": 617707,
+      "stats": {
+        "0.5h": {
+          "n_events": 617707.0,
+          "n_nonempty": 8.0,
+          "mean": 77213.375,
+          "median": 29148.0,
+          "p99": 409661.0,
+          "max": 409661.0,
+          "min_nonzero": 722.0
+        },
+        "1.0h": {
+          "n_events": 617707.0,
+          "n_nonempty": 5.0,
+          "mean": 123541.4,
+          "median": 63126.0,
+          "p99": 425348.0,
+          "max": 425348.0,
+          "min_nonzero": 722.0
+        },
+        "2.0h": {
+          "n_events": 617707.0,
+          "n_nonempty": 4.0,
+          "mean": 154426.75,
+          "median": 95818.5,
+          "p99": 425348.0,
+          "max": 425348.0,
+          "min_nonzero": 722.0
+        },
+        "4.0h": {
+          "n_events": 617707.0,
+          "n_nonempty": 3.0,
+          "mean": 205902.33333333334,
+          "median": 63126.0,
+          "p99": 553859.0,
+          "max": 553859.0,
+          "min_nonzero": 722.0
+        }
+      }
+    },
+    {
+      "scenario": "M5",
+      "host": "M5_h2",
+      "n_events": 131249,
+      "stats": {
+        "0.5h": {
+          "n_events": 131249.0,
+          "n_nonempty": 5.0,
+          "mean": 26249.8,
+          "median": 25115.0,
+          "p99": 41097.0,
+          "max": 41097.0,
+          "min_nonzero": 10220.0
+        },
+        "1.0h": {
+          "n_events": 131249.0,
+          "n_nonempty": 3.0,
+          "mean": 43749.666666666664,
+          "median": 41097.0,
+          "p99": 63065.0,
+          "max": 63065.0,
+          "min_nonzero": 27087.0
+        },
+        "2.0h": {
+          "n_events": 131249.0,
+          "n_nonempty": 2.0,
+          "mean": 65624.5,
+          "median": 65624.5,
+          "p99": 90152.0,
+          "max": 90152.0,
+          "min_nonzero": 41097.0
+        },
+        "4.0h": {
+          "n_events": 131249.0,
+          "n_nonempty": 2.0,
+          "mean": 65624.5,
+          "median": 65624.5,
+          "p99": 90152.0,
+          "max": 90152.0,
+          "min_nonzero": 41097.0
+        }
+      }
+    },
+    {
+      "scenario": "M6",
+      "host": "M6_h1",
+      "n_events": 163146,
+      "stats": {
+        "0.5h": {
+          "n_events": 163146.0,
+          "n_nonempty": 4.0,
+          "mean": 40786.5,
+          "median": 42986.0,
+          "p99": 77162.0,
+          "max": 77162.0,
+          "min_nonzero": 12.0
+        },
+        "1.0h": {
+          "n_events": 163146.0,
+          "n_nonempty": 3.0,
+          "mean": 54382.0,
+          "median": 77162.0,
+          "p99": 85972.0,
+          "max": 85972.0,
+          "min_nonzero": 12.0
+        },
+        "2.0h": {
+          "n_events": 163146.0,
+          "n_nonempty": 3.0,
+          "mean": 54382.0,
+          "median": 77162.0,
+          "p99": 85972.0,
+          "max": 85972.0,
+          "min_nonzero": 12.0
+        },
+        "4.0h": {
+          "n_events": 163146.0,
+          "n_nonempty": 3.0,
+          "mean": 54382.0,
+          "median": 77162.0,
+          "p99": 85972.0,
+          "max": 85972.0,
+          "min_nonzero": 12.0
+        }
+      }
+    },
+    {
+      "scenario": "M6",
+      "host": "M6_h2",
+      "n_events": 203648,
+      "stats": {
+        "0.5h": {
+          "n_events": 203648.0,
+          "n_nonempty": 7.0,
+          "mean": 29092.571428571428,
+          "median": 25115.0,
+          "p99": 92995.0,
+          "max": 92995.0,
+          "min_nonzero": 270.0
+        },
+        "1.0h": {
+          "n_events": 203648.0,
+          "n_nonempty": 5.0,
+          "mean": 40729.6,
+          "median": 32077.0,
+          "p99": 92995.0,
+          "max": 92995.0,
+          "min_nonzero": 270.0
+        },
+        "2.0h": {
+          "n_events": 203648.0,
+          "n_nonempty": 3.0,
+          "mean": 67882.66666666667,
+          "median": 78306.0,
+          "p99": 125072.0,
+          "max": 125072.0,
+          "min_nonzero": 270.0
+        },
+        "4.0h": {
+          "n_events": 203648.0,
+          "n_nonempty": 3.0,
+          "mean": 67882.66666666667,
+          "median": 78306.0,
+          "p99": 125072.0,
+          "max": 125072.0,
+          "min_nonzero": 270.0
+        }
+      }
+    },
+    {
+      "scenario": "S1",
+      "host": "S1",
+      "n_events": 98537,
+      "stats": {
+        "0.5h": {
+          "n_events": 98537.0,
+          "n_nonempty": 4.0,
+          "mean": 24634.25,
+          "median": 23474.0,
+          "p99": 51577.0,
+          "max": 51577.0,
+          "min_nonzero": 12.0
+        },
+        "1.0h": {
+          "n_events": 98537.0,
+          "n_nonempty": 3.0,
+          "mean": 32845.666666666664,
+          "median": 37119.0,
+          "p99": 61406.0,
+          "max": 61406.0,
+          "min_nonzero": 12.0
+        },
+        "2.0h": {
+          "n_events": 98537.0,
+          "n_nonempty": 2.0,
+          "mean": 49268.5,
+          "median": 49268.5,
+          "p99": 61406.0,
+          "max": 61406.0,
+          "min_nonzero": 37131.0
+        },
+        "4.0h": {
+          "n_events": 98537.0,
+          "n_nonempty": 2.0,
+          "mean": 49268.5,
+          "median": 49268.5,
+          "p99": 61406.0,
+          "max": 61406.0,
+          "min_nonzero": 37131.0
+        }
+      }
+    },
+    {
+      "scenario": "S2",
+      "host": "S2",
+      "n_events": 178476,
+      "stats": {
+        "0.5h": {
+          "n_events": 178476.0,
+          "n_nonempty": 11.0,
+          "mean": 16225.09090909091,
+          "median": 1079.0,
+          "p99": 135578.0,
+          "max": 135578.0,
+          "min_nonzero": 2.0
+        },
+        "1.0h": {
+          "n_events": 178476.0,
+          "n_nonempty": 7.0,
+          "mean": 25496.571428571428,
+          "median": 2776.0,
+          "p99": 135578.0,
+          "max": 135578.0,
+          "min_nonzero": 30.0
+        },
+        "2.0h": {
+          "n_events": 178476.0,
+          "n_nonempty": 5.0,
+          "mean": 35695.2,
+          "median": 2776.0,
+          "p99": 170336.0,
+          "max": 170336.0,
+          "min_nonzero": 30.0
+        },
+        "4.0h": {
+          "n_events": 178476.0,
+          "n_nonempty": 5.0,
+          "mean": 35695.2,
+          "median": 2776.0,
+          "p99": 170336.0,
+          "max": 170336.0,
+          "min_nonzero": 30.0
+        }
+      }
+    },
+    {
+      "scenario": "S3",
+      "host": "S3",
+      "n_events": 133728,
+      "stats": {
+        "0.5h": {
+          "n_events": 133728.0,
+          "n_nonempty": 2.0,
+          "mean": 66864.0,
+          "median": 66864.0,
+          "p99": 71006.0,
+          "max": 71006.0,
+          "min_nonzero": 62722.0
+        },
+        "1.0h": {
+          "n_events": 133728.0,
+          "n_nonempty": 1.0,
+          "mean": 133728.0,
+          "median": 133728.0,
+          "p99": 133728.0,
+          "max": 133728.0,
+          "min_nonzero": 133728.0
+        },
+        "2.0h": {
+          "n_events": 133728.0,
+          "n_nonempty": 1.0,
+          "mean": 133728.0,
+          "median": 133728.0,
+          "p99": 133728.0,
+          "max": 133728.0,
+          "min_nonzero": 133728.0
+        },
+        "4.0h": {
+          "n_events": 133728.0,
+          "n_nonempty": 1.0,
+          "mean": 133728.0,
+          "median": 133728.0,
+          "p99": 133728.0,
+          "max": 133728.0,
+          "min_nonzero": 133728.0
+        }
+      }
+    },
+    {
+      "scenario": "S4",
+      "host": "S4",
+      "n_events": 129250,
+      "stats": {
+        "0.5h": {
+          "n_events": 129250.0,
+          "n_nonempty": 2.0,
+          "mean": 64625.0,
+          "median": 64625.0,
+          "p99": 120281.0,
+          "max": 120281.0,
+          "min_nonzero": 8969.0
+        },
+        "1.0h": {
+          "n_events": 129250.0,
+          "n_nonempty": 1.0,
+          "mean": 129250.0,
+          "median": 129250.0,
+          "p99": 129250.0,
+          "max": 129250.0,
+          "min_nonzero": 129250.0
+        },
+        "2.0h": {
+          "n_events": 129250.0,
+          "n_nonempty": 1.0,
+          "mean": 129250.0,
+          "median": 129250.0,
+          "p99": 129250.0,
+          "max": 129250.0,
+          "min_nonzero": 129250.0
+        },
+        "4.0h": {
+          "n_events": 129250.0,
+          "n_nonempty": 1.0,
+          "mean": 129250.0,
+          "median": 129250.0,
+          "p99": 129250.0,
+          "max": 129250.0,
+          "min_nonzero": 129250.0
+        }
+      }
+    }
+  ]
+}
