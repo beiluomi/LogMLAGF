@@ -1,5 +1,14 @@
 # Known Issues
 
+## Phase 12 待核实（写 related work 前必须 resolve）
+
+- **Threatrace 与 ATT&CK 强关联性核实**（2026-05-05 标记，由决策 2 Innovation 2 prior work 引发）。Threatrace (Wang et al., NDSS '22) 据印象主要是用 GraphSAGE 做 provenance graph 上的 node-level 异常检测，**不一定显式使用 ATT&CK 模板**。Phase 12 写 related work 时按以下流程处理：
+  1. 拉 Threatrace 原文与代码（NDSS '22；GitHub 搜 "threatrace"）。
+  2. 核实其方法是否显式以 ATT&CK TTP 作为输入或训练监督信号。
+  3. 如果是 → 保留在 Innovation 2 prior work 清单中；
+  4. 如果否 → 把 Threatrace 移到 Innovation 1 的 PIDS baseline 类（与 KAIROS / MAGIC / FLASH 同类），并把 Innovation 2 的 ATT&CK-augmentation 先验工作替换为：TTPDrill / AttacKG / Holmes / RapSheet 这几个候选中真正以 ATT&CK 做攻击合成的工作（同样需 verify 而非凭印象引用）。
+  5. 修订完落到 `docs/design_decisions.md` 决策 2 + 修订历史。
+
 ## 环境（Phase 0 探明，2026-05-05）
 
 | 项 | 取值 |

@@ -35,9 +35,10 @@
 
 **最近的先验工作（必须在 related work 正面对比）。**
 
-- GraphFormers (NeurIPS '21) — 通用文档图 + LM 融合，**非异构、非时序、非溯源图领域**。
-- PLATO (KDD '24) — 文本图协同表征学习，**非时序节点记忆、非 APT 检测**。
-- THLM — 异构 + LM，**非时序、非预训练阶段双向融合**。
+- **GraphFormers** (Yang et al., NeurIPS '21; arXiv:2105.02605) — GNN-nested Transformer 做文档图 + LM 表示学习。**非异构、非时序、非溯源图领域、非每层双向跨模态融合。**
+- **GreaseLM** (Zhang et al., ICLR '22 Spotlight; arXiv:2201.08860) — 多层 modality interaction 融合 LM 与 KG，**架构上最接近我们的双向跨模态融合**。但目标领域是 commonsense QA + 知识图，**非异构异质类型、非时序节点记忆、非溯源图、非预训练阶段（其训练目标是 finetune for QA）**。
+- **Patton** (Jin et al., ACL '23 Long Oral; aclanthology.org/2023.acl-long.387) — text-rich network 上的 LM 预训练（network-contextualized MLM + masked node prediction），**预训练范式最接近**。但**网络同构、无时序、无双向跨模态注意力机制**。
+- **THLM** (Zou et al., EMNLP Findings '23; arXiv:2310.12580) — text-attributed heterogeneous graph 上的 LM 预训练，**"异构 + LM 预训练"维度最直接的先验**。但**LM 与异构 GNN 是 joint optimization 而非每层双向跨模态融合；无时序节点记忆；非溯源图 / 非 APT 检测。**
 
 **禁止使用 "to the best of our knowledge" 单独作为新颖性论证**。必须用上述差异化对比补足。
 
@@ -54,7 +55,8 @@
 
 **最近的先验工作（必须在 related work 正面对比）。**
 
-- Threatrace — 基于 ATT&CK 的异常检测，**非 graph augmentation、非对比学习目标**。
+- **Threatrace** — provenance graph 上的 node-level 异常检测。**非 graph augmentation、非对比学习目标。** 注：Threatrace 与 ATT&CK 的强关联性需在 Phase 12 写 related work 前重新核实（见 `docs/known_issues.md` "Phase 12 待核实"），如果其实并不显式使用 ATT&CK 模板，则把它移到 Innovation 1 的 PIDS baseline 类（与 KAIROS / MAGIC / FLASH 同类），改用真正用 ATT&CK 做攻击合成的工作（TTPDrill / AttacKG / Holmes / RapSheet 候选）。
+- **ConGraT** (Brannon et al., TextGraphs-17 @ ACL '24 workshop; arXiv:2305.14321, 首发 2023-05) — text-attributed graph 上的 graph–text contrastive 预训练，CLIP-风格 InfoNCE，**"图–文对比目标"维度最直接的先验**。但**无攻击模式增强（无 RAPA）、非异构异质类型、非溯源图领域、非预训练阶段联合多目标**。注：workshop paper，submitter 可能被审稿人就 venue 权重质疑——以 arXiv 首发时间锚定 priority。
 - 其他基于 ATT&CK 驱动合成的 PIDS 工作 — **非预训练阶段、非图–文对比框架**。
 
 同样禁止 "to the best of our knowledge" 单独充数。
@@ -101,6 +103,7 @@
 ### 4.2 图编码器策略
 
 - HTGN（HGT + Time2Vec + TGN memory）从 day 1 实现。
+  - **HGT** (Hu, Dong, Wang, Sun — WWW '20; arXiv:2003.01332; DOI 10.1145/3366423.3380027) 是 HTGN 的 building block；论文 related work 中引用为异构图 transformer 的基础工作，**不作为 novelty 对比对象**——我们的贡献在于把 HGT 与 Time2Vec、TGN-memory、双向跨模态融合组合成新的预训练框架，而非重新发明异构 attention。
 - **不实现同构 GraphSAGE 中间产物**——这是工程上的浪费。
 - 同构 GAT、HGT-without-temporal 仅作为 Phase 11 消融对照（B4、B5）。
 
@@ -142,10 +145,12 @@
 | FileObject            | file              |                                                   |
 | UnnamedPipeObject     | **file**          | 与 KAIROS / MAGIC / FLASH 对齐（关键，见下方论证） |
 | MemoryObject          | file              | 共享内存按文件语义处理                              |
-| SrcSinkObject         | socket            | generic source/sink，多数为 IPC                    |
+| SrcSinkObject         | socket            | generic source/sink，多数为 IPC †                  |
 | NetFlowObject         | network           |                                                   |
 | Event                 | （边，不是节点）   | Event 承载操作类型与时间戳，不参与节点类型           |
 | 未列出的边缘类型      | file（兜底）       | 同时计入 `docs/known_issues.md` 待审               |
+
+> **† SrcSinkObject 映射注解**：本映射为 LogHetero 默认，属于灰色地带（KAIROS / MAGIC 在它们的 ATLAS 处理脚本中可能采用不同映射）。Phase 8 跑 KAIROS / MAGIC 基线时如发现其官方代码采用其他映射，按本节末"Phase 8 基线一致性原则"统一更新本表，不在基线代码里 patch。
 
 ### UnnamedPipeObject → file 的论证（Q2 修正了 Phase 0 报告里的默认）
 
@@ -214,3 +219,4 @@ KAIROS (S&P'24) 与 MAGIC (USENIX Sec'24) 都明确批评过 ATLAS 原作切分�
 
 - **2026-05-05** — 初版（v0.0-scaffold）：决策 1–4 写入。
 - **2026-05-05** — 第一次扩展：决策 5（CDM 节点映射）、6（Leave-One-Attack-Out 协议）、7（AI 协作披露策略）写入；回应 Q1–Q5。
+- **2026-05-05** — 引用核实修订：决策 2 删除 PLATO（确认为 AI 引用幻觉），扩充 Innovation 1 prior work 至 4 条 verified 引用（GraphFormers / GreaseLM / Patton / THLM），Innovation 2 加入 ConGraT 作为 GTCL 直接先验且 Threatrace 标注 Phase 12 待核实；决策 4.2 加入 HGT building-block 引用；决策 5 给 SrcSinkObject 加显式 footnote。
