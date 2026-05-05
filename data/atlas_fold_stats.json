@@ -1,0 +1,161 @@
+{
+  "generated_at_utc": "2026-05-05T13:59:57+00:00",
+  "config": {
+    "time_window_hours": 1.0,
+    "max_events_per_window": 1000,
+    "subgraph_max_nodes": 128,
+    "subgraph_khop": 2,
+    "subgraph_edge_ranking": "joint",
+    "label_loader": "benign_only_label_loader (Phase 8 stub)"
+  },
+  "n_total_events": 2820678,
+  "n_buckets": 54,
+  "folds": [
+    {
+      "leave_out": "S1",
+      "train_n_target_events": 45879,
+      "test_n_target_events": 2012,
+      "train_n_host_window_keys": 51,
+      "test_n_host_window_keys": 3,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 45879,
+      "test_benign_count": 2012,
+      "test_host_breakdown": {
+        "S1": 2012
+      }
+    },
+    {
+      "leave_out": "S2",
+      "train_n_target_events": 42746,
+      "test_n_target_events": 5145,
+      "train_n_host_window_keys": 47,
+      "test_n_host_window_keys": 7,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 42746,
+      "test_benign_count": 5145,
+      "test_host_breakdown": {
+        "S2": 5145
+      }
+    },
+    {
+      "leave_out": "S3",
+      "train_n_target_events": 46891,
+      "test_n_target_events": 1000,
+      "train_n_host_window_keys": 53,
+      "test_n_host_window_keys": 1,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 46891,
+      "test_benign_count": 1000,
+      "test_host_breakdown": {
+        "S3": 1000
+      }
+    },
+    {
+      "leave_out": "S4",
+      "train_n_target_events": 46891,
+      "test_n_target_events": 1000,
+      "train_n_host_window_keys": 53,
+      "test_n_host_window_keys": 1,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 46891,
+      "test_benign_count": 1000,
+      "test_host_breakdown": {
+        "S4": 1000
+      }
+    },
+    {
+      "leave_out": "M1",
+      "train_n_target_events": 42751,
+      "test_n_target_events": 5140,
+      "train_n_host_window_keys": 48,
+      "test_n_host_window_keys": 6,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 42751,
+      "test_benign_count": 5140,
+      "test_host_breakdown": {
+        "M1_h1": 2140,
+        "M1_h2": 3000
+      }
+    },
+    {
+      "leave_out": "M2",
+      "train_n_target_events": 42301,
+      "test_n_target_events": 5590,
+      "train_n_host_window_keys": 48,
+      "test_n_host_window_keys": 6,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 42301,
+      "test_benign_count": 5590,
+      "test_host_breakdown": {
+        "M2_h1": 2590,
+        "M2_h2": 3000
+      }
+    },
+    {
+      "leave_out": "M3",
+      "train_n_target_events": 40891,
+      "test_n_target_events": 7000,
+      "train_n_host_window_keys": 47,
+      "test_n_host_window_keys": 7,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 40891,
+      "test_benign_count": 7000,
+      "test_host_breakdown": {
+        "M3_h1": 3000,
+        "M3_h2": 4000
+      }
+    },
+    {
+      "leave_out": "M4",
+      "train_n_target_events": 40891,
+      "test_n_target_events": 7000,
+      "train_n_host_window_keys": 47,
+      "test_n_host_window_keys": 7,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 40891,
+      "test_benign_count": 7000,
+      "test_host_breakdown": {
+        "M4_h1": 3000,
+        "M4_h2": 4000
+      }
+    },
+    {
+      "leave_out": "M5",
+      "train_n_target_events": 40169,
+      "test_n_target_events": 7722,
+      "train_n_host_window_keys": 46,
+      "test_n_host_window_keys": 8,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 40169,
+      "test_benign_count": 7722,
+      "test_host_breakdown": {
+        "M5_h2": 3000,
+        "M5_h1": 4722
+      }
+    },
+    {
+      "leave_out": "M6",
+      "train_n_target_events": 41609,
+      "test_n_target_events": 6282,
+      "train_n_host_window_keys": 46,
+      "test_n_host_window_keys": 8,
+      "train_attack_count": 0,
+      "test_attack_count": 0,
+      "train_benign_count": 41609,
+      "test_benign_count": 6282,
+      "test_host_breakdown": {
+        "M6_h2": 4270,
+        "M6_h1": 2012
+      }
+    }
+  ]
+}
