@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 import pytest
 
 from loghetero.data.parsers.base import (
+    ALLOWED_EDGE_TRIPLES,
+    EdgeType,
     Event,
     FailureSample,
     NodeType,
@@ -189,6 +191,52 @@ class TestTimeHelpers:
         aware = datetime(2018, 1, 1, tzinfo=timezone.utc)
         with pytest.raises(ValueError):
             localize_eastern(aware)
+
+
+class TestEdgeTypeAndTriples:
+    """Pin the EdgeType enum and the ALLOWED_EDGE_TRIPLES schema (Checkpoint 3 lock)."""
+
+    def test_edge_type_string_enum_compat(self) -> None:
+        # str-Enum equality with raw strings (same trick as NodeType).
+        assert EdgeType.FILE_READ == "file_read"
+        assert EdgeType("net_dns_query") is EdgeType.NET_DNS_QUERY
+
+    def test_send_recv_split_by_dst_type(self) -> None:
+        # Checkpoint 3 invariant: same operation must NOT span multiple
+        # (src, dst) combos -> CDM EVENT_SENDTO/RECVFROM split into
+        # SOCKET vs NETWORK variants so the (src, edge, dst) triple stays unique.
+        assert EdgeType.NET_SEND_SOCKET != EdgeType.NET_SEND_NETWORK
+        assert EdgeType.NET_RECV_SOCKET != EdgeType.NET_RECV_NETWORK
+
+    def test_every_edge_type_appears_at_most_once_in_triples(self) -> None:
+        # Each EdgeType maps to exactly ONE (src, dst) pair so the same
+        # operation never broadcasts across multiple PyG edge stores.
+        # UNKNOWN is the only intentional exception: it appears in zero
+        # canonical triples (builder skips it).
+        seen: dict[EdgeType, tuple[NodeType, NodeType]] = {}
+        for src, edge, dst in ALLOWED_EDGE_TRIPLES:
+            assert edge not in seen, (
+                f"EdgeType.{edge.name} has multiple (src, dst) pairs in "
+                f"ALLOWED_EDGE_TRIPLES: previously {seen[edge]}, now ({src}, {dst})"
+            )
+            seen[edge] = (src, dst)
+        assert EdgeType.UNKNOWN not in seen
+
+    def test_every_canonical_edge_type_member_is_in_triples(self) -> None:
+        # Every EdgeType besides UNKNOWN must appear in ALLOWED_EDGE_TRIPLES,
+        # so adding an enum entry without listing its triple fails this test.
+        in_triples = {edge for _, edge, _ in ALLOWED_EDGE_TRIPLES}
+        missing = set(EdgeType) - in_triples - {EdgeType.UNKNOWN}
+        assert not missing, f"EdgeType members not in ALLOWED_EDGE_TRIPLES: {missing}"
+
+    def test_dns_triples_use_network_on_both_sides(self) -> None:
+        for edge in (EdgeType.NET_DNS_QUERY, EdgeType.NET_DNS_RESPONSE):
+            triples = [t for t in ALLOWED_EDGE_TRIPLES if t[1] is edge]
+            assert triples == [(NodeType.network, edge, NodeType.network)]
+
+    def test_process_create_is_process_to_process(self) -> None:
+        triples = [t for t in ALLOWED_EDGE_TRIPLES if t[1] is EdgeType.PROCESS_CREATE]
+        assert triples == [(NodeType.process, EdgeType.PROCESS_CREATE, NodeType.process)]
 
 
 class TestParserABC:

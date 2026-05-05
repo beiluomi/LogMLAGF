@@ -215,8 +215,35 @@ KAIROS (S&P'24) 与 MAGIC (USENIX Sec'24) 都明确批评过 ATLAS 原作切分�
 
 ---
 
+## 决策 8：孤立节点（isolated node）保留策略
+
+**决定（2026-05-05，Checkpoint 3 启动）。** 异构图构建时**保留**所有孤立节点（degree=0），在节点上加 `isolated=True` bool 属性，由下游模块决定怎么处理；**禁止在数据流水线层悄悄丢节点**。
+
+### 论证
+
+APT 检测里"出现一次就消失"的孤立节点经常是**攻击者的 staging server / C2 通道 / one-shot exfiltration endpoint**。例如：
+
+- ATLAS S1 的 `0xalsaheel.com` 域名作为 phishing landing page，可能在整个良性背景流量里只被解析一次。
+- C2 信标 `192.168.X.X` 出现一次后立即关闭。
+- exfiltration 目标 `attacker.evil/upload` 只在攻击的最后阶段被访问。
+
+**"出现一次"这个特征本身就是异常信号**——简单过滤孤立节点等于在数据流水线层就把异常信号删掉，让下游 HTGN + GTCL 看不到。
+
+### 实施
+
+- `src/loghetero/data/provenance_graph.py::build_graph()` 输出的 PyG `HeteroData` 在每个 node store 上加 `isolated: torch.BoolTensor`，标记 `degree == 0` 的节点。
+- 下游模块（HTGN、anomaly head）可读 `node.isolated` 决定是否对孤立节点做特殊处理（例如给一个可学习的 isolated-node embedding bias）。
+- **fallback 例外（仅一处）**：如果某 (scenario, host_id) 二元组的孤立节点占比 > 80%，说明数据切分太碎（窗口太小 / scenario 事件太稀），在 Checkpoint 4 报告里显式标注，由项目所有者决定是否调整 Phase 1.5 时间窗粒度。
+
+### 与决策 6 的关联
+
+决策 6 的 leave-one-attack-out 切分协议在 (host_id, time_window) 二元组层面切分良性数据；本决策在节点层面保留所有节点。两者正交：切分发生在窗口边界，孤立节点判定发生在窗口内部图构建。
+
+---
+
 ## 修订历史
 
 - **2026-05-05** — 初版（v0.0-scaffold）：决策 1–4 写入。
 - **2026-05-05** — 第一次扩展：决策 5（CDM 节点映射）、6（Leave-One-Attack-Out 协议）、7（AI 协作披露策略）写入；回应 Q1–Q5。
 - **2026-05-05** — 引用核实修订：决策 2 删除 PLATO（确认为 AI 引用幻觉），扩充 Innovation 1 prior work 至 4 条 verified 引用（GraphFormers / GreaseLM / Patton / THLM），Innovation 2 加入 ConGraT 作为 GTCL 直接先验且 Threatrace 标注 Phase 12 待核实；决策 4.2 加入 HGT building-block 引用；决策 5 给 SrcSinkObject 加显式 footnote。
+- **2026-05-05** — 决策 8（孤立节点保留策略）写入；回应 Checkpoint 3 启动指令第 4 条。

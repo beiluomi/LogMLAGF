@@ -12,7 +12,13 @@ from loghetero.data.parsers.atlas import (
     FirefoxParser,
     SecurityEventsParser,
 )
-from loghetero.data.parsers.base import NodeType, ParseStats, localize_eastern, to_utc_ns
+from loghetero.data.parsers.base import (
+    EdgeType,
+    NodeType,
+    ParseStats,
+    localize_eastern,
+    to_utc_ns,
+)
 
 # ---------------------------------------------------------------------------
 # DNS parser
@@ -48,7 +54,11 @@ class TestDnsParser:
         p = _write_tmp(tmp_path, "dns", DNS_SAMPLE)
         events = list(DnsParser().parse_file(p, scenario_id="S1", host_id="h1"))
         ops = [e.operation for e in events]
-        assert ops == ["dns_query", "dns_response", "dns_query"]
+        assert ops == [
+            EdgeType.NET_DNS_QUERY,
+            EdgeType.NET_DNS_RESPONSE,
+            EdgeType.NET_DNS_QUERY,
+        ]
 
     def test_subject_object_are_ips_typed_network(self, tmp_path: Path) -> None:
         p = _write_tmp(tmp_path, "dns", DNS_SAMPLE)
@@ -101,7 +111,7 @@ class TestFirefoxParser:
         assert e.subject_type is NodeType.process
         assert e.obj.startswith("https://")
         assert e.obj_type is NodeType.network
-        assert e.operation == "http_request"
+        assert e.operation == EdgeType.NET_HTTP_REQUEST
 
     def test_utc_authoritative(self, tmp_path: Path) -> None:
         p = _write_tmp(tmp_path, "firefox.txt", FIREFOX_SAMPLE)
@@ -176,7 +186,7 @@ class TestSecurityEventsParser:
         assert e.subject_type is NodeType.process
         assert e.obj == "C:\\Users\\aalsahee"
         assert e.obj_type is NodeType.file
-        assert e.operation == "file_access"
+        assert e.operation == EdgeType.FILE_ACCESS
         assert e.attributes["account_name"] == "aalsahee"
         assert e.attributes["access_mask"] == "0x1"
 
@@ -189,7 +199,7 @@ class TestSecurityEventsParser:
         assert "payload.exe" in e.obj
         assert e.subject_type is NodeType.process
         assert e.obj_type is NodeType.process
-        assert e.operation == "process_create"
+        assert e.operation == EdgeType.PROCESS_CREATE
 
     def test_eastern_time_localization_post_dst_end(self, tmp_path: Path) -> None:
         # Nov 5 2018 is after DST end (Nov 4 02:00) -> EST (UTC-5)

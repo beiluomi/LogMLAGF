@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from .base import (
+    EdgeType,
     Event,
     NodeType,
     ParseStats,
@@ -98,7 +99,9 @@ class DnsParser(Parser):
 
                 desc = m.group("desc")
                 is_response = "response" in desc.lower()
-                operation = "dns_response" if is_response else "dns_query"
+                operation = (
+                    EdgeType.NET_DNS_RESPONSE if is_response else EdgeType.NET_DNS_QUERY
+                )
 
                 query_match = _DNS_QUERY_NAME_RE.search(desc)
                 query_name = query_match.group(1) if query_match else None
@@ -187,7 +190,7 @@ class FirefoxParser(Parser):
                     subject_type=NodeType.process,
                     obj=uri_match.group("url"),
                     obj_type=NodeType.network,
-                    operation="http_request",
+                    operation=EdgeType.NET_HTTP_REQUEST,
                     log_type=self.LOG_TYPE,
                     scenario_id=scenario_id,
                     host_id=host_id,
@@ -204,14 +207,14 @@ class FirefoxParser(Parser):
 
 # Curated audit EventIDs we treat as security-relevant. Other EventIDs are
 # skipped (not failed). Mapping: eventid -> (operation, obj_node_type).
-_AUDIT_EVENTID_DISPATCH: dict[str, tuple[str, NodeType]] = {
-    "4656": ("handle_request", NodeType.file),
-    "4658": ("handle_close", NodeType.file),
-    "4660": ("file_delete", NodeType.file),
-    "4663": ("file_access", NodeType.file),
-    "4688": ("process_create", NodeType.process),
-    "4689": ("process_exit", NodeType.process),
-    "4690": ("handle_duplicate", NodeType.file),
+_AUDIT_EVENTID_DISPATCH: dict[str, tuple[EdgeType, NodeType]] = {
+    "4656": (EdgeType.HANDLE_REQUEST, NodeType.file),
+    "4658": (EdgeType.HANDLE_CLOSE, NodeType.file),
+    "4660": (EdgeType.FILE_DELETE, NodeType.file),
+    "4663": (EdgeType.FILE_ACCESS, NodeType.file),
+    "4688": (EdgeType.PROCESS_CREATE, NodeType.process),
+    "4689": (EdgeType.PROCESS_EXIT, NodeType.process),
+    "4690": (EdgeType.HANDLE_DUPLICATE, NodeType.file),
 }
 
 _BODY_KV_RE = re.compile(r"^\s+([\w/\(\) ]+?):\s+(.+?)\s*$")
@@ -301,9 +304,13 @@ class SecurityEventsParser(Parser):
                     subject_type = NodeType.process
                     obj_val = fields.get("New Process Name") or fields.get("Process Name") or "?"
                 elif eventid in {"4689"}:
+                    # Process-exit: emit a self-loop edge (process -> process via
+                    # PROCESS_EXIT). Setting obj == subject keeps the triple
+                    # (process, process_exit, process) consistent with
+                    # ALLOWED_EDGE_TRIPLES instead of inventing a sentinel node.
                     subject = proc_name or account
                     subject_type = NodeType.process
-                    obj_val = "self"
+                    obj_val = subject
                 else:
                     # File-handle / access events
                     subject = proc_name or account

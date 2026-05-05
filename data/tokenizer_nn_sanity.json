@@ -1,0 +1,258 @@
+{
+  "model": "bert-base-uncased",
+  "top_k": 5,
+  "n_special_tokens": 156,
+  "n_initialised": 156,
+  "samples": {
+    "[IP]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "ip",
+          "cos_sim": 0.7354996800422668
+        },
+        {
+          "token": "address",
+          "cos_sim": 0.7047611474990845
+        },
+        {
+          "token": "addresses",
+          "cos_sim": 0.6903838515281677
+        },
+        {
+          "token": "1734",
+          "cos_sim": 0.6903310418128967
+        },
+        {
+          "token": "host",
+          "cos_sim": 0.6848795413970947
+        }
+      ]
+    },
+    "[HASH_SHA256]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "hash",
+          "cos_sim": 0.8643849492073059
+        },
+        {
+          "token": "sha",
+          "cos_sim": 0.8102461099624634
+        },
+        {
+          "token": "ש",
+          "cos_sim": 0.6739652752876282
+        },
+        {
+          "token": "ш",
+          "cos_sim": 0.6692944765090942
+        },
+        {
+          "token": "ח",
+          "cos_sim": 0.666532576084137
+        }
+      ]
+    },
+    "[URL_HTTPS]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "https",
+          "cos_sim": 0.8214000463485718
+        },
+        {
+          "token": "web",
+          "cos_sim": 0.7214045524597168
+        },
+        {
+          "token": "secure",
+          "cos_sim": 0.718396782875061
+        },
+        {
+          "token": "http",
+          "cos_sim": 0.6951726078987122
+        },
+        {
+          "token": "[unused526]",
+          "cos_sim": 0.6788270473480225
+        }
+      ]
+    },
+    "[PATH_WIN_SYS32]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "directory",
+          "cos_sim": 0.7973672151565552
+        },
+        {
+          "token": "library",
+          "cos_sim": 0.7000164985656738
+        },
+        {
+          "token": "windows",
+          "cos_sim": 0.6949535012245178
+        },
+        {
+          "token": "1695",
+          "cos_sim": 0.6921056509017944
+        },
+        {
+          "token": "1672",
+          "cos_sim": 0.6876545548439026
+        }
+      ]
+    },
+    "[PATH_REGISTRY_HKLM]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "registry",
+          "cos_sim": 0.7397530674934387
+        },
+        {
+          "token": "machine",
+          "cos_sim": 0.6787506937980652
+        },
+        {
+          "token": "1738",
+          "cos_sim": 0.6729660034179688
+        },
+        {
+          "token": "46th",
+          "cos_sim": 0.6713652610778809
+        },
+        {
+          "token": "324",
+          "cos_sim": 0.6713324189186096
+        }
+      ]
+    },
+    "[PROC_POWERSHELL]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "shell",
+          "cos_sim": 0.8281707167625427
+        },
+        {
+          "token": "windows",
+          "cos_sim": 0.7656164765357971
+        },
+        {
+          "token": "shells",
+          "cos_sim": 0.697857141494751
+        },
+        {
+          "token": "window",
+          "cos_sim": 0.6072142720222473
+        },
+        {
+          "token": "286",
+          "cos_sim": 0.590059220790863
+        }
+      ]
+    },
+    "[PROC_LSASS]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "authentication",
+          "cos_sim": 0.8165549039840698
+        },
+        {
+          "token": "security",
+          "cos_sim": 0.7062894701957703
+        },
+        {
+          "token": "1723",
+          "cos_sim": 0.7049331665039062
+        },
+        {
+          "token": "1716",
+          "cos_sim": 0.7037826180458069
+        },
+        {
+          "token": "1731",
+          "cos_sim": 0.6982000470161438
+        }
+      ]
+    },
+    "[NET_DNS]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "resolution",
+          "cos_sim": 0.7980032563209534
+        },
+        {
+          "token": "name",
+          "cos_sim": 0.7243568301200867
+        },
+        {
+          "token": "resolutions",
+          "cos_sim": 0.6714845895767212
+        },
+        {
+          "token": "names",
+          "cos_sim": 0.5905799865722656
+        },
+        {
+          "token": "moniker",
+          "cos_sim": 0.5779534578323364
+        }
+      ]
+    },
+    "[EVENT_PROC_CREATE]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "spawn",
+          "cos_sim": 0.8053895831108093
+        },
+        {
+          "token": "create",
+          "cos_sim": 0.7386688590049744
+        },
+        {
+          "token": "1621",
+          "cos_sim": 0.7025703191757202
+        },
+        {
+          "token": "1725",
+          "cos_sim": 0.7022547125816345
+        },
+        {
+          "token": "238",
+          "cos_sim": 0.7002395391464233
+        }
+      ]
+    },
+    "[OP_LOGON]": {
+      "status": "initialised",
+      "neighbours": [
+        {
+          "token": "user",
+          "cos_sim": 1.0
+        },
+        {
+          "token": "users",
+          "cos_sim": 0.7960452437400818
+        },
+        {
+          "token": "customer",
+          "cos_sim": 0.5684939026832581
+        },
+        {
+          "token": "listener",
+          "cos_sim": 0.5440348386764526
+        },
+        {
+          "token": "programmer",
+          "cos_sim": 0.5370867252349854
+        }
+      ]
+    }
+  }
+}

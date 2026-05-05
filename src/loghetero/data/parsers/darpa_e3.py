@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from .base import (
+    EdgeType,
     Event,
     NodeType,
     ParseStats,
@@ -41,24 +42,36 @@ _CDM_NODE_TYPE_MAP: dict[str, NodeType] = {
 }
 
 
-# CDM Event records carry an EventType enum like EVENT_OPEN, EVENT_READ, ...;
-# we translate the few common cases to friendly operation strings. Unknown
-# event types pass through verbatim.
-_CDM_OPERATION_MAP: dict[str, str] = {
-    "EVENT_OPEN": "file_open",
-    "EVENT_CLOSE": "file_close",
-    "EVENT_READ": "file_read",
-    "EVENT_WRITE": "file_write",
-    "EVENT_EXECUTE": "exec",
-    "EVENT_FORK": "fork",
-    "EVENT_EXIT": "process_exit",
-    "EVENT_CONNECT": "connect",
-    "EVENT_ACCEPT": "accept",
-    "EVENT_SENDTO": "send",
-    "EVENT_RECVFROM": "recv",
-    "EVENT_UNLINK": "file_delete",
-    "EVENT_RENAME": "file_rename",
+# CDM EventType -> EdgeType mapping. Send / recv depend on whether the
+# predicateObject resolves to a socket (SrcSinkObject) or network (NetFlow);
+# that disambiguation happens at edge-emit time in :func:`_resolve_edge_type`
+# below. Unknown CDM event types fall to ``EdgeType.UNKNOWN``.
+_CDM_SIMPLE_EVENT_MAP: dict[str, EdgeType] = {
+    "EVENT_OPEN": EdgeType.FILE_OPEN,
+    "EVENT_CLOSE": EdgeType.FILE_CLOSE,
+    "EVENT_READ": EdgeType.FILE_READ,
+    "EVENT_WRITE": EdgeType.FILE_WRITE,
+    "EVENT_EXECUTE": EdgeType.PROCESS_EXEC,
+    "EVENT_FORK": EdgeType.PROCESS_FORK,
+    "EVENT_EXIT": EdgeType.PROCESS_EXIT,
+    "EVENT_CONNECT": EdgeType.NET_CONNECT,
+    "EVENT_ACCEPT": EdgeType.NET_ACCEPT,
+    "EVENT_UNLINK": EdgeType.FILE_DELETE,
+    "EVENT_RENAME": EdgeType.FILE_RENAME,
 }
+
+
+def _resolve_edge_type(event_type: str, obj_node_type: NodeType) -> EdgeType:
+    """Map a CDM (event_type, obj_node_type) pair to a unique :class:`EdgeType`.
+
+    Send/recv events fan out by destination type to keep
+    ``ALLOWED_EDGE_TRIPLES`` unambiguous (Checkpoint 3 invariant).
+    """
+    if event_type == "EVENT_SENDTO":
+        return EdgeType.NET_SEND_SOCKET if obj_node_type is NodeType.socket else EdgeType.NET_SEND_NETWORK
+    if event_type == "EVENT_RECVFROM":
+        return EdgeType.NET_RECV_SOCKET if obj_node_type is NodeType.socket else EdgeType.NET_RECV_NETWORK
+    return _CDM_SIMPLE_EVENT_MAP.get(event_type, EdgeType.UNKNOWN)
 
 
 def cdm_node_type(cdm_type: str) -> NodeType:
@@ -175,7 +188,6 @@ class CDMParser(Parser):
                     continue
 
                 event_type = payload.get("type") or "EVENT_UNKNOWN"
-                operation = _CDM_OPERATION_MAP.get(event_type, event_type.lower())
 
                 subj_uuid = self._unwrap_uuid(payload.get("subject"))
                 obj_uuid = self._unwrap_uuid(payload.get("predicateObject"))
@@ -185,6 +197,7 @@ class CDMParser(Parser):
 
                 subj_cdm_type, _ = uuid_index.get(subj_uuid, ("Subject", host_id))
                 obj_cdm_type, _ = uuid_index.get(obj_uuid, ("FileObject", host_id))
+                operation = _resolve_edge_type(event_type, cdm_node_type(obj_cdm_type))
 
                 stats.record_success()
                 yield Event(

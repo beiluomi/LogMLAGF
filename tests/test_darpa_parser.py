@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from loghetero.data.parsers.base import NodeType, ParseStats
+from loghetero.data.parsers.base import EdgeType, NodeType, ParseStats
 from loghetero.data.parsers.darpa_e3 import (
     _CDM_NODE_TYPE_MAP,
     CDMParser,
@@ -74,7 +74,7 @@ class TestCDMParser:
 
     def test_event_open_resolves_types(self) -> None:
         events = list(CDMParser().parse_file(FIXTURE, scenario_id="cadets-e3", host_id="host-A"))
-        open_event = next(e for e in events if e.operation == "file_open")
+        open_event = next(e for e in events if e.operation == EdgeType.FILE_OPEN)
         assert open_event.subject_type is NodeType.process  # Subject -> process
         assert open_event.obj_type is NodeType.file  # FileObject -> file
         assert open_event.timestamp_ns == 1523344567890123456
@@ -82,31 +82,35 @@ class TestCDMParser:
     def test_unnamed_pipe_event_obj_type_is_file(self) -> None:
         # EVENT_WRITE on UnnamedPipeObject must come out as obj_type=file (decision 5).
         events = list(CDMParser().parse_file(FIXTURE, scenario_id="e3", host_id="host-A"))
-        write_event = next(e for e in events if e.operation == "file_write")
+        write_event = next(e for e in events if e.operation == EdgeType.FILE_WRITE)
         assert write_event.obj_type is NodeType.file
         assert write_event.attributes["obj_cdm_type"] == "UnnamedPipeObject"
 
-    def test_srcsink_event_obj_type_is_socket(self) -> None:
+    def test_srcsink_event_resolves_to_send_socket(self) -> None:
+        # EVENT_SENDTO + SrcSinkObject (socket) -> EdgeType.NET_SEND_SOCKET
+        # (Checkpoint 3 invariant: each (operation, obj_type) pair has a
+        # unique EdgeType to keep the PyG (src, edge, dst) triple stable.)
         events = list(CDMParser().parse_file(FIXTURE, scenario_id="e3", host_id="host-A"))
-        sendto_event = next(e for e in events if e.operation == "send")
+        sendto_event = next(e for e in events if e.operation == EdgeType.NET_SEND_SOCKET)
         assert sendto_event.obj_type is NodeType.socket
         assert sendto_event.attributes["obj_cdm_type"] == "SrcSinkObject"
+        assert sendto_event.attributes["event_type"] == "EVENT_SENDTO"
 
-    def test_netflow_event_obj_type_is_network(self) -> None:
+    def test_netflow_event_resolves_to_net_connect(self) -> None:
         events = list(CDMParser().parse_file(FIXTURE, scenario_id="e3", host_id="host-A"))
-        connect_event = next(e for e in events if e.operation == "connect")
+        connect_event = next(e for e in events if e.operation == EdgeType.NET_CONNECT)
         assert connect_event.obj_type is NodeType.network
         assert connect_event.attributes["obj_cdm_type"] == "NetFlowObject"
 
     def test_memory_event_obj_type_is_file(self) -> None:
         events = list(CDMParser().parse_file(FIXTURE, scenario_id="e3", host_id="host-A"))
-        read_event = next(e for e in events if e.operation == "file_read")
+        read_event = next(e for e in events if e.operation == EdgeType.FILE_READ)
         assert read_event.obj_type is NodeType.file
         assert read_event.attributes["obj_cdm_type"] == "MemoryObject"
 
     def test_fork_event_subject_and_obj_both_process(self) -> None:
         events = list(CDMParser().parse_file(FIXTURE, scenario_id="e3", host_id="host-A"))
-        fork_event = next(e for e in events if e.operation == "fork")
+        fork_event = next(e for e in events if e.operation == EdgeType.PROCESS_FORK)
         assert fork_event.subject_type is NodeType.process
         assert fork_event.obj_type is NodeType.process
 

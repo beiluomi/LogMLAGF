@@ -39,6 +39,102 @@ class NodeType(str, Enum):
     user = "user"
 
 
+class EdgeType(str, Enum):
+    """Canonical edge-operation enum.
+
+    **Locked at Checkpoint 3 (Phase 1.4) — do not extend without an RFC.**
+    PyG ``HeteroData`` keys edges by the triple ``(src_node_type,
+    edge_type, dst_node_type)``. To keep that triple stable across the
+    project, every concrete parser MUST emit ``Event.operation`` from
+    this enum, and each enum member MUST appear in exactly one
+    ``(src_type, dst_type)`` combination listed in :data:`ALLOWED_EDGE_TRIPLES`.
+
+    The names are kept loud (``NET_SEND_SOCKET`` vs ``NET_SEND_NETWORK``)
+    to enforce the "same operation -> same (src, dst)" invariant that the
+    Checkpoint 3 launch spec calls out. Without that, the same operation
+    string in two different (src, dst) cells would silently broadcast to
+    multiple PyG edge stores, breaking message-passing semantics.
+    """
+
+    # File / handle operations: process -> file
+    FILE_OPEN = "file_open"
+    FILE_READ = "file_read"
+    FILE_WRITE = "file_write"
+    FILE_CLOSE = "file_close"
+    FILE_ACCESS = "file_access"  # ATLAS EventID 4663 generic access
+    FILE_DELETE = "file_delete"
+    FILE_RENAME = "file_rename"
+    HANDLE_REQUEST = "handle_request"      # ATLAS EventID 4656
+    HANDLE_CLOSE = "handle_close"          # ATLAS EventID 4658
+    HANDLE_DUPLICATE = "handle_duplicate"  # ATLAS EventID 4690
+
+    # Process operations: process -> process
+    PROCESS_CREATE = "process_create"  # ATLAS EventID 4688
+    PROCESS_FORK = "fork"
+    PROCESS_EXEC = "exec"
+    PROCESS_EXIT = "process_exit"      # ATLAS EventID 4689 (self-loop)
+
+    # Network operations (note: src/dst type baked into the name to keep
+    # the triple unique, per Checkpoint 3 invariant)
+    NET_CONNECT = "net_connect"             # process -> network
+    NET_ACCEPT = "net_accept"               # process -> network
+    NET_SEND_SOCKET = "net_send_socket"     # process -> socket (CDM SrcSink IPC)
+    NET_SEND_NETWORK = "net_send_network"   # process -> network (TCP/UDP/CDM NetFlow)
+    NET_RECV_SOCKET = "net_recv_socket"     # process -> socket
+    NET_RECV_NETWORK = "net_recv_network"   # process -> network
+    NET_HTTP_REQUEST = "net_http_request"   # process -> network (URL)
+    NET_DNS_QUERY = "net_dns_query"         # network -> network
+    NET_DNS_RESPONSE = "net_dns_response"   # network -> network
+
+    # User auth (placeholder for Phase 1.4+; ATLAS does not surface logon
+    # events through our 7-EventID dispatch yet, but the enum slot is
+    # reserved so Phase 5+ can wire user nodes without adding to this enum).
+    USER_LOGON = "user_logon"
+    USER_LOGOFF = "user_logoff"
+
+    # Bottom type: an operation we don't know how to map. Builder will skip
+    # edges with this type rather than guess a wrong (src, dst) triple.
+    UNKNOWN = "unknown"
+
+
+# The full, exhaustive list of canonical (src_type, edge_type, dst_type) triples
+# the project understands. PyG HeteroData edge stores will be keyed by these.
+# Adding to this set requires a design_decisions.md RFC.
+ALLOWED_EDGE_TRIPLES: frozenset[tuple[NodeType, EdgeType, NodeType]] = frozenset(
+    {
+        # File / handle: process -> file
+        (NodeType.process, EdgeType.FILE_OPEN, NodeType.file),
+        (NodeType.process, EdgeType.FILE_READ, NodeType.file),
+        (NodeType.process, EdgeType.FILE_WRITE, NodeType.file),
+        (NodeType.process, EdgeType.FILE_CLOSE, NodeType.file),
+        (NodeType.process, EdgeType.FILE_ACCESS, NodeType.file),
+        (NodeType.process, EdgeType.FILE_DELETE, NodeType.file),
+        (NodeType.process, EdgeType.FILE_RENAME, NodeType.file),
+        (NodeType.process, EdgeType.HANDLE_REQUEST, NodeType.file),
+        (NodeType.process, EdgeType.HANDLE_CLOSE, NodeType.file),
+        (NodeType.process, EdgeType.HANDLE_DUPLICATE, NodeType.file),
+        # Process -> process
+        (NodeType.process, EdgeType.PROCESS_CREATE, NodeType.process),
+        (NodeType.process, EdgeType.PROCESS_FORK, NodeType.process),
+        (NodeType.process, EdgeType.PROCESS_EXEC, NodeType.process),
+        (NodeType.process, EdgeType.PROCESS_EXIT, NodeType.process),
+        # Network
+        (NodeType.process, EdgeType.NET_CONNECT, NodeType.network),
+        (NodeType.process, EdgeType.NET_ACCEPT, NodeType.network),
+        (NodeType.process, EdgeType.NET_SEND_SOCKET, NodeType.socket),
+        (NodeType.process, EdgeType.NET_SEND_NETWORK, NodeType.network),
+        (NodeType.process, EdgeType.NET_RECV_SOCKET, NodeType.socket),
+        (NodeType.process, EdgeType.NET_RECV_NETWORK, NodeType.network),
+        (NodeType.process, EdgeType.NET_HTTP_REQUEST, NodeType.network),
+        (NodeType.network, EdgeType.NET_DNS_QUERY, NodeType.network),
+        (NodeType.network, EdgeType.NET_DNS_RESPONSE, NodeType.network),
+        # User auth
+        (NodeType.user, EdgeType.USER_LOGON, NodeType.process),
+        (NodeType.user, EdgeType.USER_LOGOFF, NodeType.process),
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Event:
     """One parsed log event, normalised to UTC ns and the 5-type schema.
