@@ -92,6 +92,64 @@ y_dst[v] = HGTConv(x_dict)[v] + α · sum_{(u,v) ∈ E_r} MLP(concat(time2vec(t_
 
 **Phase 12 Methods 写作 hook**：在解释 "为什么我们的时间信息走残差通道而非 attention bias" 时直接引用本条 + 决策 4.2 footnote。审稿人喜欢看到设计深度而非单点优化。
 
+### Task B "完全 benign 子图" spec 与 Phase 8 ground-truth label loader 依赖缺口（2026-05-06，Checkpoint 10 启动 RFC）
+
+**现象**：Checkpoint 10 Task B launch spec 要求"从 ATLAS 选取一个完全 benign 的 (scenario, host, window) 子图作为数据源... 由 v0.1-data 的 fold stats 报告辅助筛选"。验证发现该筛选路径**不可执行**：`data/atlas_fold_stats.json` 所有 fold 的 `train_attack_count` 与 `test_attack_count` 全是 0，`data/processed/atlas_fold_stats_report.md:25-30` 自陈原因——"attack counts are 0 across all folds because the Phase-8 ground-truth label loader has not been wired in yet -- the stub treats every event as benign"。`AtlasGroundTruthLabelLoader` 是 Phase 8 待办（见本文件下方 Phase 8 待办条目），v0.1-data 范围内无机制识别真实攻击事件。
+
+**RFC 三选项分析**：
+
+| 选项 | 实施 | 工时增量 | Task B 数字含义 |
+|---|---|---|---|
+| A | Phase 3 临时实现 minimal `AtlasGroundTruthLabelLoader` scoped to S1 + ATLAS 论文 Table I | +2-3h（Phase 8 工作量提前） | "完全 benign" 严格成立 |
+| B | 基于 ATLAS 论文文档攻击时间窗口手动避开攻击区间 | +0.5h | benign-only 基于论文 timeline 推断而非 ground truth label |
+| **C** ⭐ | **重新解读 benign-only 必要性**：链路预测是 self-supervised 结构任务，对事件语义不敏感；放宽要求为"任选 ATLAS 子图"，benign-only 约束推到 Phase 4 入口 | +0h | AUC 数字含义改为 "validates HTGN structural learning capability on mixed-event provenance graphs" |
+
+**最终决策（2026-05-06，user 拍板）**：**Option C**。决策理由：
+
+1. Phase 3 链路预测的本质是验证 HTGN 编码器对异构时序图结构的学习能力，这个能力对 attack edge 与 benign edge 一视同仁——结构信号不挑事件性质。
+2. Option A 把 Phase 8 工作量提前到 Phase 3 破坏 phase gate 边界，且重建攻击实体清单本身有不确定性。
+3. Option B "基于论文时间线推断" 实际是 Option C 的弱化版——同样无 ground truth 校验，但加了一层未必准的人工启发。
+4. AUC > 0.85 硬门槛**保留不变**，Option C 不绕过该门槛；只是承认 benign-only 不是数字含义的关键变量。
+
+**Option C 落地三条件**（user 强制）：
+
+1. **报告透明性**：Checkpoint 10 报告里 Task B 部分必须显式声明数据性质为 "mixed subgraph (predominantly benign with unverified attack fraction; Phase 8 ground-truth label loader not yet wired in v0.1-data)"，**禁止**使用 "benign subgraph" / "benign-only" 措辞。AUC > 0.85 解读改为 "validates HTGN's structural learning capability on mixed-event provenance graphs"。同套措辞用于 Phase 12 论文 Methods 章节。
+2. **RFC 决议留档**：本条目即落实条件 2，与 Checkpoint 7 的 HGTConv edge_attr RFC + Checkpoint 8 的 absent-vs-zero 设计选择并列，构成 Phase 3 主要设计偏离的完整 audit trail。
+3. **Phase 4 入口 benign-only 重审议程**：见下方 "Phase 4 待办" 子节。
+
+**Phase 12 Methods 写作 hook**：解释 Phase 3 sanity check 数据来源时使用上述精确措辞，避免审稿人误解为"作者承认链路预测无法区分攻击模式"——我们的论证是"link prediction tests structural learning, not anomaly discrimination; the latter is Phase 8's job with proper ground-truth labels"。
+
+### HeteroTGNMemory 跨类型 src 索引语义错误（2026-05-06，Checkpoint 10 Task A 实施时发现）
+
+**现象**：Checkpoint 9 HeteroTGNMemory 设计假设 PyG TGNMemory 的 `update_state(src, dst, t, raw_msg)` 内部仅按 dst 索引；实地验证发现 PyG `IdentityMessage`（默认消息函数）拼接 `[memory[src], memory[dst], t_enc, raw_msg]`——**会按 src 索引查找 memory**。HeteroTGNMemory 当前给每个 memory 类型的 `TGNMemory` 实例分配 `num_nodes_of_that_type` 大小的 memory buffer；但跨类型边（如 `(user, USER_LOGON, process)` → 路由到 `process_memory.update_state(src=user_idx, dst=process_idx, ...)`）会让 user_idx 被解读为 process_memory 的 slot index——**索引混淆**：拿到的是某个其它 process 的 memory，不是 user 的（user 本就无 memory）。
+
+**两层后果**：
+
+1. **OOB（index out-of-bounds）**：当 src 类型节点数 > dst 类型节点数 + dst 是 memory-bearing 类型时，src_idx 直接越界 process_memory 的 `_assoc[n_id]` buffer，CUDA 抛 device-side assert。Checkpoint 10 Task A 玩具图 5 用户 / 8 socket / 15 process 场景下 `(process, NET_*_SOCKET, socket)` 边的 src=process_idx (max 14) 越界 socket_memory size 8。
+2. **语义错误（不 crash 时）**：sub-agent Task A 用 workaround——给所有 memory-bearing 类型分配 `max(node_counts_across_types)` 大小的 buffer——避免 OOB，但 src=user_idx 仍被解读为 process_memory 的 slot，message 拼接拿错 slot 数据。功能可跑（Task A 仍以 loss 0.034 / acc 1.00 通过 hard gate）因为 HGT 主路径占 85% 参数主导信号，TGN 内存噪声被 attention 路径压过。
+
+**为什么 Checkpoint 9 没在该层暴露**：Checkpoint 9 测试用 single-type-only mock 数据（所有边都是 `(process, X, process)` / `(socket, X, socket)`），src 与 dst 同类型不触发跨类型索引混淆。Task A 第一次构造跨类型异构图 + memory-bearing dst 才暴露。
+
+**当前 workaround（Checkpoint 10 Task A + Task B 沿用）**：在调用方（脚本侧）给 `num_nodes_per_type` 中的 memory-bearing 类型（process / socket）分配 `max(across all node types)` 大小，规避 OOB。**承认这是 hack**：拿到的 src memory slot 是 garbage，HGT 主路径压过噪声让模型仍可学习。Phase 7 真实训练前必须修。
+
+**为什么 Checkpoint 10 不就地修而推到 Phase 7**：proper fix 需在 HeteroTGNMemory 层引入"跨类型边的 src 内存查找处理"——三种实施路径（zero src memory / 用 dst 替代 src / 自定义 heterogeneous message function 替换 IdentityMessage）都属架构选择，应在 Phase 7 训练循环建立时与 batch 边界 msg_store 清理一并讨论；Checkpoint 10 仅为 sanity check + 链路预测验证 HTGN 容量，workaround 不阻塞 AUC > 0.85 门槛验证。
+
+**Phase 12 Methods 写作 hook**：本条暂不进 Methods 写作（属实施 bug 而非设计选择）；属于 Limitation 章节"对 PyG 同构组件做异构 wrapper 的 hidden interface assumption"案例素材。
+
+## Phase 4 待办
+
+### Pretraining 数据 benign-only 约束的重审议程（2026-05-06，Checkpoint 10 Option C 决议触发）
+
+Phase 3 Checkpoint 10 因 `AtlasGroundTruthLabelLoader` Phase 8 待办无法切真实 benign-only 子图，user 选 Option C 把 benign-only 约束推到 Phase 4 入口讨论。**Phase 4 跨模态融合启动前必须重审 pretraining 数据的 benign-only 约束**——开 Phase 4 第一个 RFC 议程，逐条决议：
+
+(a) **跨模态联合预训练阶段是否需要纯 benign 数据**：HTGN-LM 跨模态注意力的预训练任务（Phase 4 / Checkpoint 12-14 待 launch spec）会把图嵌入与 LM 嵌入对齐；如果训练数据混入攻击事件，模型可能把"攻击模式"学成"正常 representation"，污染下游 Phase 8 anomaly fine-tuning 的 representation baseline。需根据 Phase 4 损失函数性质决定：MLM-style + 对比损失对数据噪声相对鲁棒，离群少量攻击事件影响有限；node-level 重建损失敏感度更高。
+
+(b) **如需 benign-only，是否依赖 Phase 8 真实 label loader 才能切**：若 (a) 决议要 benign-only，最干净路径是 Phase 4 launch 前先实施 `AtlasGroundTruthLabelLoader`（Phase 8 待办前置），用真实标签筛子图。代价：Phase 8 工作量前置 1-2 天。
+
+(c) **如果 Phase 8 label loader 滞后于 Phase 4，是否走 ATLAS 论文 timeline 启发式临时切分作为 stop-gap**：备选——基于 ATLAS 论文 Table I 提供的攻击时间区间，避开攻击窗口取早期良性时段子图作 stop-gap；Phase 8 label loader 落地后 retroactively 校验启发式切分的纯净度。这条只在 (b) 因故无法前置时启用。
+
+**Phase 4 入口 RFC 触发器**：开始 Phase 4 第一个 commit 前，main agent 必须读本条目并给出 (a)(b)(c) 三选一决议；不得 silent 跳过。议程产出预期：一条 docs commit 在 known_issues.md "Phase 3 设计偏离记录::Task B 完全 benign 子图 spec" 子节下追加 "Phase 4 RFC 决议（YYYY-MM-DD）：选 X，理由 Y" 标注，让 audit trail 串联起来。
+
 ## Phase 12 论文素材
 
 ### Contribution-boundary 设计原则（2026-05-05，Checkpoint 8 lesson）
@@ -132,6 +190,33 @@ y_dst[v] = HGTConv(x_dict)[v] + α · sum_{(u,v) ∈ E_r} MLP(concat(time2vec(t_
 **Phase 7 实施时**：
 1. 启动 Phase 7 第一天先做 1 小时 PyG dry-run sanity check（minimal 训练循环 + minimal HeteroTGNMemory），验证选定的 fix path 真能让多 batch backward 跑通；这是对 Phase 3 期间 PyG 接口连续 3 个 surprise（Long timestamp / 零节点 graceful skip / msg_store 跨 batch）的应对，前置侦察成本小但能避免中段被连环 PyG 接口问题阻塞。
 2. fix 落地后立即去掉 `tests/test_htgn.py::TestStandardCoverage::test_multi_batch_with_detach_runs_cleanly` 的 `@pytest.mark.skip` 装饰器，让它转为常态绿测试；同时给本 known_issues 条目标 [resolved (commit X)]。
+
+### HeteroTGNMemory 跨类型 src 索引语义 proper fix（2026-05-06，Checkpoint 10 Task A 触发）
+
+**现象**：见 "Phase 3 设计偏离记录::HeteroTGNMemory 跨类型 src 索引语义错误"。Checkpoint 10 用 num_nodes_per_type[memory_types] = max-across-types 的 workaround 规避 OOB 但 src memory 拿错 slot；Phase 7 真实训练前必须修。
+
+**为什么 Phase 7 前不能继续 workaround**：Phase 7 batch=16 或 32 真实训练会涉及 batch 内多个不同类型节点频繁触发跨类型边 message passing；workaround 让 src memory 始终是 garbage 直接污染 TGN GRU 学习信号——Checkpoint 10 sanity check 容忍该噪声因 HGT 主路径占 85% 主导，但 Phase 4+ 跨模态融合训练会让 TGN memory 路径权重通过对比学习自适应放大，garbage src memory 会被 confounded fit，导致 Phase 8 anomaly detection AUC 不稳。
+
+**三条 fix 实施路径（Phase 7 启动时三选一，user 拍板）**：
+
+- **Path A（推荐，最小 invasion）**：在 `src/loghetero/models/graph/tgn_memory.py::HeteroTGNMemory.update_state` 中检测 `src_type != dst_type`，将 src 替换为 dst（自指）后再调用底层 `TGNMemory.update_state`；语义上等价于"消息 src 信息全部走 raw_msg 通道（已含 src embedding 投影），不通过 PyG memory 查找拿 src 隐状态"。具体实现：
+  ```python
+  def update_state(self, dst_type: NodeType, src: Tensor, dst: Tensor,
+                   t: Tensor, raw_msg: Tensor, *, src_type: NodeType) -> None:
+      if dst_type not in self._memories:
+          return  # silent no-op (existing behaviour)
+      tgn = self._memories[dst_type]
+      effective_src = dst if src_type != dst_type else src  # NEW
+      tgn.update_state(effective_src, dst, t, raw_msg)
+  ```
+  调用点（HTGN.forward）需补传 src_type 参数。**优势**：保 PyG TGNMemory + IdentityMessage 不动；语义清晰（"raw_msg 通道独占 src 信息"）；3 行核心改动。**风险**：`memory[src]` slot 被 `memory[dst]` 替代后 IdentityMessage concat 多了一份 dst 自身 embedding（重复 information），轻微冗余但不破坏正确性。
+- **Path B（替换 message function）**：自定义 `class HeteroIdentityMessage(IdentityMessage)` 重写 `forward(z_src, z_dst, raw_msg, t_enc)` 跳过 z_src 通道；将 PyG TGNMemory 构造时 `message_module=HeteroIdentityMessage(...)` 注入。**优势**：semantically 干净（src memory lookup 完全消除，message dim 减少 memory_dim）；**风险**：依赖 PyG message function 接口稳定性；整改 message_dim 涉及 GRU input dim 调整。
+- **Path C（per-type message store）**：HeteroTGNMemory 维护 per-(src_type, dst_type) 独立 msg_store，update_state 时把 src memory 从 src_type 的 memory（而非 dst_type 的）查找；最 proper 但侵入性大，需重写 PyG TGNMemory 内部 msg_store 结构。**仅作 Phase 11+ ablation 备选**，Phase 7 不推荐。
+
+**Phase 7 实施时**：
+1. 启动 Phase 7 第一天的 PyG dry-run sanity check 阶段（见上方 "TGN msg_store 跨 batch 清理" 条目）一并验证选定 fix path 在跨类型边上的正确性。
+2. fix 落地后，把 Checkpoint 10 Task A + Task B 中 num_nodes_per_type 的 max-across-types workaround 改回 actual-per-type，重跑两脚本验证 AUC / loss 数字与 workaround 版一致或更优；若数字劣化触发 RFC 重新评估 fix path。
+3. 给本待办标 [resolved (commit X)]，相应在 "Phase 3 设计偏离记录::HeteroTGNMemory 跨类型 src 索引语义错误" 加 "Phase 7 RFC 决议：选 Path X，commit Y" 串联标注。
 
 ### VRAM batch=32 真实测量 sanity gate（2026-05-06，Checkpoint 9 benchmark naive 外推超 target）
 
