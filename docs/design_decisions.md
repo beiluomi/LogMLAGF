@@ -107,6 +107,8 @@
 - **不实现同构 GraphSAGE 中间产物**——这是工程上的浪费。
 - 同构 GAT、HGT-without-temporal 仅作为 Phase 11 消融对照（B4、B5）。
 
+> **† Phase 11 消融 B5 实施细节（2026-05-05 决议，回应 Checkpoint 7 RFC）**：B5（HGT-without-temporal）通过两个开关组合实现——`residual_alpha=0` 关闭 Time2Vec 边残差通道（详见 `docs/known_issues.md` "HGTConv edge_attr 接口限制 + Option C 残差通道决议"），`tgn_memory.enabled=false` 关闭 TGN 节点记忆模块（Checkpoint 8 实现时同样加 switch）。剩余配置即为 stock HGTConv on heterogeneous graph 的纯空间异构基线。这个组合开关让 B5 与完整 LogHetero 的代码路径**只差两个 yaml 配置项，不需要维护独立模型类**。`configs/model/graph/htgn.yaml` 是这两个 switch 的 single source of truth。
+
 ### 4.3 融合策略
 
 - 双向跨模态注意力（BERT 第 3 / 6 / 9 / 12 层）从 day 1 实现。

@@ -1,0 +1,48 @@
+# Phase 3 HTGN config (single source of truth for the heterogeneous + temporal
+# graph encoder). Consumed by:
+#   * src/loghetero/models/graph/hgt_layer.py    (Checkpoint 7)
+#   * src/loghetero/models/graph/tgn_memory.py   (Checkpoint 8)
+#   * src/loghetero/models/graph/htgn.py         (Checkpoint 9, main module)
+# Phase 11 ablations B4 / B5 toggle the two switches at the bottom.
+
+# Hidden dimension shared across HGT layers and TGN memory. 256 is chosen
+# for clean compatibility with BERT-base 768 (= 256 * 3) and to keep the
+# Phase 4 cross-modal projection layer parameter count modest.
+hidden_dim: 256
+
+# HGT attention heads + dropout (Phase 7 fine-tunes via override if needed).
+num_heads: 8
+dropout: 0.1
+
+# Time2Vec dimensionality. Fixed default 32; sweep space [16, 32, 64]
+# reserved for Phase 11 ablation. omega / phi all learnable per spec.
+time2vec:
+  dim: 32
+
+# Option-C residual channel for the HGT layer (Checkpoint 7 RFC decision;
+# see docs/known_issues.md "HGTConv edge_attr 接口限制 + Option C 残差通道决议").
+# y_dst = HGTConv(x_dict) + residual_alpha * scatter_add(MLP(time2vec || eid_onehot))
+# where the MLP is Linear(61->64) + GELU + Linear(64->hidden_dim).
+#
+# residual_alpha is FIXED (not learnable). Sweep space [0.1, 0.3, 0.5, 1.0]
+# for Phase 11 ablation; setting residual_alpha=0 disables the temporal
+# residual channel and is one of the two switches that implements ablation
+# B5 (HGT-without-temporal).
+residual_alpha: 0.5
+
+# TGN node memory (Checkpoint 8). Memory only attaches to process and socket
+# nodes (state-bearing entity types; file/network/user are stateless wrt
+# memory updates). Setting tgn_memory.enabled=false is the OTHER half of
+# ablation B5.
+tgn_memory:
+  enabled: true
+  dim: 256                        # aligned with hidden_dim
+  update_mechanism: gru           # GRU per TGN paper; do NOT switch to LSTM
+  memory_node_types: [process, socket]
+  reset_on_epoch_boundary: true   # within-epoch persistence; reset across epochs
+
+# HTGN main module (Checkpoint 9). 3-layer stack with per-layer decay
+# coefficients [1.0, 0.7, 0.4] reduce over-reliance on deep layers
+# (sourced from GraphSAGE depth-decay practice).
+n_layers: 3
+layer_decay_gamma: [1.0, 0.7, 0.4]
