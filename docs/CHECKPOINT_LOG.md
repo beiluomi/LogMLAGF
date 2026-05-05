@@ -165,4 +165,36 @@
 
 ---
 
-*下一条记录：Phase 3 / Checkpoint 7 (HTGN Time2Vec / TGN memory / HGT layer，创新点 1 第一部分)。*
+## Checkpoint 7 — Phase 3.1 + 3.2 Time2Vec + HGT layer wrapper (Option-C residual per RFC)
+
+- **完成日期**：2026-05-05
+- **Commit**：（本次 commit；hash 在 git log 可见）
+- **核心交付物**：
+  - `src/loghetero/models/encoders/time2vec.py`：4 个独立 nn.Parameter（omega_0 + phi_0 标量 + omega + phi 各 [dim-1]）；公式 `[ω₀·t + φ₀, sin(ω_i·t + φ_i)]`；`U(-0.1, 0.1)` init via `reset_parameters()`；公开 `forward(t: [*, 1]) -> [*, dim]` 接口；`dim < 2` guard。**由后台 sub-agent 实现** (multi-agent path)。
+  - `tests/test_time2vec.py`：6 collected items (4 test methods × parametrize over dim ∈ {16, 32, 64})。Forward shape / determinism / discrimination / gradient flow 四档覆盖。
+  - `src/loghetero/models/graph/hgt_layer.py`：`HGTLayer` 包装 stock PyG HGTConv + Option-C 残差通道。残差 MLP `Linear(61→64) + GELU + Linear(64→hidden_dim)`，scatter_add 到 dst 节点；α=0 短路退化为 stock。`forward(x_dict, edge_index_dict, edge_time_dict, time2vec)`。
+  - `tests/test_hgt_layer.py`：9 测试，含 user-required 三反例（α=0 退化 / α 缩放正确 / t=0 finite / 梯度流过两路径）+ shape / empty edge / α<0 reject / dropout reject / EdgeType=29 dim guard。
+  - `configs/model/graph/htgn.yaml`：Hydra single source of truth（hidden_dim=256 / num_heads=8 / dropout=0.1 / time2vec.dim=32 / **residual_alpha=0.5 fixed** / tgn_memory.enabled=true / n_layers=3 / layer_decay_gamma=[1.0, 0.7, 0.4]）。Checkpoint 8 / 9 共用。
+  - `docs/known_issues.md` 加 "Phase 3 设计偏离记录 / HGTConv edge_attr 接口限制 + Option C 残差通道决议"——完整 RFC + 4 选项分析 + 决策 + Phase 12 Methods 写作 hook。
+  - `docs/design_decisions.md` 决策 4.2 加 footnote：Phase 11 ablation B5 = `residual_alpha=0` + `tgn_memory.enabled=false` 双开关组合，无独立模型类。
+- **关键 metric**：
+  - 测试：**170 / 170 全绿**（155 non-integration 累计 + 15 新增 Time2Vec + HGT），其中 Time2Vec 2.31s / HGT layer 4.93s。
+  - ruff + mypy clean (41 src files)。
+  - 残差 MLP 参数量：(32+29)·64 + 64 + 64·256 + 256 ≈ 21k params per layer，3 层堆叠总 ~63k（远小于 BERT-base 110M）。
+- **决策点**：
+  - **Checkpoint 7 RFC（user 拍板 Option C）**：PyG 2.7 HGTConv 不支持 edge_attr，user 选 Option C 走残差通道而非 Option A 的 subclass HGTConv。论证：multi-pathway temporal modeling（HGT 残差 + TGN memory + Phase 4 cross-modal query）三处分布式承担时间信息编码，比单点 attention bias 鲁棒，论文叙事更立体。
+  - α 默认 0.5 fixed（不学习）：避免训练初期 residual 主导（α=1.0）或残差弱到不存在（α=0.1）；中间值平衡，sweep [0.1, 0.3, 0.5, 1.0] 留 Phase 11 消融。
+  - EdgeType one-hot 维度修正：launch spec 写 25，实际 29（Q-1 加 3 USER_* + UNKNOWN），concat dim 61 不是 57。
+  - **Multi-agent 并行实施**：Time2Vec 由后台 sub-agent 实施（独立模块、spec 已锁），主 agent 同步实施 HGT layer wrapper + docs / config 更新；并行无冲突，节省壁钟时间。
+- **新增 known_issues**：Phase 3 设计偏离记录 - HGTConv edge_attr 接口限制 + Option C 残差通道决议。
+- **PROGRESS.md / CHECKPOINT_LOG.md 更新**：本 commit 同时整体覆写 PROGRESS.md（Phase 3 进行中，Checkpoint 7 已完成 1/4）+ 追加本条 CHECKPOINT_LOG.md 记录。
+- **执行 Checkpoint 7 launch spec 完成清单**：
+  - [x] Time2Vec 周期性单元测试通过（同时间点 cos-sim=1.0；不同时间点 cos-sim<1）
+  - [x] HGT layer forward shape 测试（5 类节点输出 hidden=256，本测试用 hidden=32 加速）
+  - [x] 梯度回传 sanity（Time2Vec 4 参数组 + HGT + edge_mlp 全部收非零梯度）
+  - [x] 模型 size 数字（残差 MLP ~21k / layer，stock HGTConv 由 PyG 决定）
+  - [x] PROGRESS.md / CHECKPOINT_LOG.md 同步更新
+
+---
+
+*下一条记录：Phase 3 / Checkpoint 8 (TGN-style 节点记忆，仅 process/socket，GRU update，batched，epoch-bounded 持久化)。*

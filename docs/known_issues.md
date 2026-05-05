@@ -48,6 +48,35 @@
   - **检测方法**：Phase 4 attention 可视化里画一组 "downloaded payload → executed via Process Create" 的 case study；如果攻击杀伤链频繁缺这一段，说明需要扩展 firefox 解析。
   - **如果触发**：扩展 `parsers/atlas.py::FirefoxParser` 加 `_FIREFOX_DOWNLOAD_RE` 与 `_FIREFOX_DNS_RE` pattern，提取 download URL → cache2 file path 与 DNS module 解析事件。
 
+## Phase 3 设计偏离记录
+
+### HGTConv edge_attr 接口限制 + Option C 残差通道决议（2026-05-05，Checkpoint 7 启动 RFC）
+
+**现象**：PyG 2.7 `HGTConv.forward(x_dict, edge_index_dict)` **不接受 edge_attr 参数**——实地验证 `TypeError: HGTConv.forward() got an unexpected keyword argument 'edge_attr_dict'`。Phase 3 launch spec 假设 "Time2Vec + EdgeType one-hot 拼接 → Linear 投影 → 送入 HGTConv 的 edge_attr" 在 stock HGTConv 上不存在该接口。同样地 `HANConv` 也不支持；只有同构层（GATv2 / TransformerConv 等）支持 `edge_attr`。
+
+**RFC 四选项分析**：
+
+| 选项 | 描述 | 评价 |
+|---|---|---|
+| A | Subclass HGTConv，把 `MLP(edge_attr_proj)` 注入 attention bias | 时间作为 attention 一等公民；~150 行，PyG 升级脆性 |
+| B | 弃用 HGTConv，对每边类型用 TransformerConv + HANConv-style metapath 聚合 | 干净；违反"不重新发明轮子" |
+| **C** ⭐ | 保持 stock HGTConv + 额外计算 `edge_attr_proj` 通过 `scatter_add(MLP(edge_attr_proj))` 加到目标节点作残差 | 守 spec、~30 行、edge feature 走独立通道、Phase 11 B5 消融简单 |
+| D | 计算 `edge_attr_proj` 但不接入；推到 Checkpoint 9 | 不解决问题、Checkpoint 7 incomplete |
+
+**最终决策（2026-05-05，user 拍板）**：**Option C**。公式：
+
+```
+y_dst[v] = HGTConv(x_dict)[v] + α · sum_{(u,v) ∈ E_r} MLP(concat(time2vec(t_uv), edge_type_onehot_r))
+```
+
+- α 默认 **0.5**（不学习，固定值），Hydra config `configs/model/graph/htgn.yaml::residual_alpha`，sweep 空间 `[0.1, 0.3, 0.5, 1.0]` for Phase 11 ablation
+- 残差 MLP 双层带激活：`Linear(61→64) + GELU + Linear(64→hidden_dim=256)`（注：61 = Time2Vec 32 + EdgeType one-hot **29**，原 launch spec 的 25 是基于 Q-1 mini-checkpoint 之前的 EdgeType 数量；Q-1 加 3 个 USER_* + UNKNOWN 后实际 29）
+- α=0 退化为 stock HGTConv，是 Phase 11 消融 B5（HGT-without-temporal）的实施路径之一
+
+**决策依据（user 论证，作为 Phase 12 论文素材）**：LogHetero 的 temporal modeling 是 **multi-pathway 设计而非单一机制**——HGT 边残差（Option C 这条）+ TGN 节点记忆（Checkpoint 8）+ Phase 4 跨模态注意力 query 三处分布式承担时间信息编码，比把时间集中堆在 attention bias 一个地方更鲁棒，论文叙事也更立体。Option A 的 subclass HGTConv 强耦合方式不值得为了"时间作为 attention 一等公民"这个叙事 polish 去承担 PyG 升级脆性与调试复杂度。
+
+**Phase 12 Methods 写作 hook**：在解释 "为什么我们的时间信息走残差通道而非 attention bias" 时直接引用本条 + 决策 4.2 footnote。审稿人喜欢看到设计深度而非单点优化。
+
 ## Phase 12 论文素材
 
 - **BERT 在 ATLAS 真实日志上 cos-sim 0.97-1.00 的强语义聚合**（2026-05-05 标记，由 Phase 2 / Checkpoint 6 sanity check 引发）。`scripts/bert_sanity_check.py` 在 ATLAS S1 / 600 events 上验证：benign DNS query top-5 NN 全是其他 DNS query (cos-sim 0.97-1.00)；noteworthy file_access top-5 NN 全是同模式 file_access (cos-sim 1.00)。
