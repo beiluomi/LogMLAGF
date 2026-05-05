@@ -23,7 +23,7 @@ The two innovations are wired into a single end-to-end joint pretraining objecti
 ## Implementation Progress Tracker
 
 - [x] **Phase 0** — Scaffold *(infra)*
-- [ ] **Phase 1** — Data pipeline (ATLAS + DARPA TC E3 → heterogeneous temporal tensors) *(infra)*
+- [x] **Phase 1** — Data pipeline (ATLAS + DARPA TC E3 → heterogeneous temporal tensors) *(infra)*
 - [ ] **Phase 2** — Text-encoder integration (`bert-base-uncased`, frozen by default) *(infra)*
 - [ ] **Phase 3** — HTGN encoder ⭐️ *(Innovation 1, part 1)*
 - [ ] **Phase 4** — Bidirectional cross-modal fusion ⭐️ *(Innovation 1, part 2)*
@@ -37,6 +37,17 @@ The two innovations are wired into a single end-to-end joint pretraining objecti
 - [ ] **Phase 12** — Paper-ready release + double-blind anonymization
 
 ⭐️ marks phases that directly implement one of the two core innovations.
+
+## 新会话起步指引 (For new AI agents / collaborators)
+
+If you are a new AI agent or human collaborator picking up this project, **read these documents in order before doing anything else**:
+
+1. [`docs/PROGRESS.md`](docs/PROGRESS.md) — single source of truth for the project's current Phase / Checkpoint, latest checkpoint commit, full commit chain, active decisions (1–N), what's next, and one-shot reproduction commands. **Read this first.** Pasting this file into a new chat session brings any new agent up to speed in seconds without manual re-introduction.
+2. [`docs/design_decisions.md`](docs/design_decisions.md) — the project constitution. All implementation must respect these decisions; modifying any of them requires an RFC PR reviewed by the project owner.
+3. [`docs/CHECKPOINT_LOG.md`](docs/CHECKPOINT_LOG.md) — append-only audit trail. Every completed checkpoint has one entry covering deliverables, metrics, key decisions resolved (including user-override / agent-pushback events), and triggered known-issues entries. Phase 12 paper-writing will mine this log for the Methodology / Limitation timeline.
+4. [`docs/known_issues.md`](docs/known_issues.md) — known issues, Phase-specific TODOs, and historical revisions (e.g. the Phase 1.2 修订记录 explaining why a -8k success delta was a bug fix not data loss).
+
+After reading 1+2 you have enough context to start work; 3+4 are reference. **From Phase 2 onwards, every checkpoint commit MUST update PROGRESS.md (overwrite) AND append to CHECKPOINT_LOG.md** — a checkpoint that fails to do so does not pass sanity check.
 
 ## Datasets and Baselines
 

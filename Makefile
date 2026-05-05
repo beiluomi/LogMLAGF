@@ -1,4 +1,4 @@
-.PHONY: help hello lint format test integration-test sync sync-ml prepare-data pretrain finetune-anomaly ablation cross-dataset anonymize clean
+.PHONY: help hello lint format test integration-test sync sync-ml prepare-data refresh-manifest pretrain finetune-anomaly ablation cross-dataset anonymize clean
 
 UV := uv
 PY := $(UV) run python
@@ -14,6 +14,7 @@ help:
 	@echo "  make integration-test - Install ML stack and run integration-marked tests"
 	@echo "  --- Phase-gated targets (placeholders until each phase lands) ---"
 	@echo "  make prepare-data     - Phase 1: build data pipeline"
+	@echo "  make refresh-manifest - Re-generate data/atlas_manifest.json (ONLY sanctioned path to update it)"
 	@echo "  make pretrain         - Phase 7: joint HTGN-LM + RAPA-GTCL pretraining"
 	@echo "  make finetune-anomaly - Phase 8: anomaly-detection fine-tuning"
 	@echo "  make cross-dataset    - Phase 9: DARPA TC E3 cross-dataset eval"
@@ -49,6 +50,16 @@ integration-test:
 
 prepare-data:
 	@echo "[Phase 1+] not yet implemented; see plan/Phase-1." && exit 1
+
+refresh-manifest:
+	@echo "[refresh-manifest] Re-generating data/atlas_manifest.json from current data/raw/atlas/ state."
+	@echo "[refresh-manifest] This is the ONLY sanctioned way to update the manifest after"
+	@echo "[refresh-manifest] modifying raw data. After this completes:"
+	@echo "[refresh-manifest]   1) git diff data/atlas_manifest.json  -- inspect what changed"
+	@echo "[refresh-manifest]   2) commit the new manifest with a message describing WHY"
+	@echo "[refresh-manifest]   3) document the data modification in docs/known_issues.md"
+	@rm -f data/atlas_manifest.json
+	$(UV) run python scripts/verify_data_integrity.py
 
 pretrain:
 	@echo "[Phase 7+] not yet implemented; see plan/Phase-7." && exit 1
