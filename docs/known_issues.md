@@ -109,6 +109,47 @@ y_dst[v] = HGTConv(x_dict)[v] + α · sum_{(u,v) ∈ E_r} MLP(concat(time2vec(t_
   - **Phase 12 写作要点**：放在 Methods 章节"4.x Text encoder design"段，作为我们选择 frozen BERT-base + cleaner-driven placeholder 这个工程组合的"empirical validation" 段落论据。可附 cos-sim 数字 + 一两个 NN retrieval 例（"DNS query → DNS query"、"file_access → file_access"）作为 figure。
   - **可对照写作 hook**：cf. Patton (Jin et al., ACL '23) 那篇 paper 也讨论了在 text-rich network 上预训练 LM 的必要性 vs 直接用通用 LM 的代价权衡——我们的结论是 "for log domain with proper cleaner, frozen general LM works"。
 
+## Phase 7 待办
+
+### TGN msg_store 跨 batch 清理（2026-05-06，Checkpoint 9 发现）
+
+**现象**：`tests/test_htgn.py::TestStandardCoverage::test_multi_batch_with_detach_runs_cleanly` 跨 batch 第二次 `loss.backward()` 抛 `RuntimeError: Trying to backward through the graph a second time`，即使在 batch 1 末尾调用 `htgn.tgn_memory.detach()`。根因：PyG `TGNMemory` 内部维护 `msg_store: dict[int, tuple[Tensor, Tensor, Tensor, Tensor]]`，存放每个 dst node 上次收到的 raw_msg / src / t / src_msg 元组，等下次 forward 时聚合成 message 喂 GRU。`detach()` 当前只 detach `memory` 与 `last_update` 两个 buffer，**不清也不 detach `msg_store` 内部的 raw_msg tensor**——后者仍持有 batch 1 计算图的引用。
+
+**为什么是 Phase 7 责任而非 Checkpoint 9 模块 bug**：HTGN 模块本身在单 batch 路径下 4 套参数梯度 sanity 全部独立 pass（user-required Checkpoint 9 deliverable）；跨 batch 持久化协议属于 DataLoader / Lightning Module 层职责。Checkpoint 9 用 `@pytest.mark.skip(reason="Deferred to Phase 7: ...")` 显式挂钩，Phase 7 训练循环建立时本待办自动归属当时的实施 PR。
+
+**两条 fix 实施路径（Phase 7 启动时二选一，先尝 Path A）**：
+
+- **Path A（推荐，wrapper-side fix）**：扩展 `src/loghetero/models/graph/tgn_memory.py::HeteroTGNMemory.detach()`，让其在调用 per-type `TGNMemory.detach()` 之外，**额外清空** 每个 per-type TGNMemory 的 `msg_store`。具体实现：
+  ```python
+  def detach(self) -> None:
+      for tgn in self._memories.values():
+          tgn.detach()  # detach memory + last_update buffers
+          tgn.msg_store.clear()  # NEW: drop batch-1 raw_msg references
+  ```
+  在 Lightning Module 的 `on_train_batch_end` hook 里调用 `self.htgn.tgn_memory.detach()`。**优势**：fix 集中在 HeteroTGNMemory 一处，对调用方透明；**风险**：清空 msg_store 意味着 batch 边界丢失上一批最近 raw_msg，第一次 forward 会用零初始 message，需在 Phase 7 通过 epoch loss 曲线验证不影响收敛（如确实降级，回退到 Path B）。
+- **Path B（备选，pipeline-side fix）**：在 Lightning Module 的 `on_train_batch_start` hook 中先 `htgn.tgn_memory.reset_msg_store()`（需扩 HeteroTGNMemory 暴露此方法）再训练，使 msg_store 永远不跨 batch 携带梯度图；或者在 `update_state(...)` 调用之后立即 `forward(n_id_dict)` 触发 PyG 内部 message passing 把 msg_store 排空，让 raw_msg 在 batch 边界前已被消费。**优势**：semantically 更接近 PyG 设计本意（message store 在 forward 中即时消费）；**风险**：增加调用约束，HeteroTGNMemory caller 必须遵守 update→forward 配对协议，违反时 silent drop message。
+
+**Phase 7 实施时**：
+1. 启动 Phase 7 第一天先做 1 小时 PyG dry-run sanity check（minimal 训练循环 + minimal HeteroTGNMemory），验证选定的 fix path 真能让多 batch backward 跑通；这是对 Phase 3 期间 PyG 接口连续 3 个 surprise（Long timestamp / 零节点 graceful skip / msg_store 跨 batch）的应对，前置侦察成本小但能避免中段被连环 PyG 接口问题阻塞。
+2. fix 落地后立即去掉 `tests/test_htgn.py::TestStandardCoverage::test_multi_batch_with_detach_runs_cleanly` 的 `@pytest.mark.skip` 装饰器，让它转为常态绿测试；同时给本 known_issues 条目标 [resolved (commit X)]。
+
+### VRAM batch=32 真实测量 sanity gate（2026-05-06，Checkpoint 9 benchmark naive 外推超 target）
+
+**现象**：`scripts/bench_htgn.py` 在 ATLAS S1 K-hop 单子图 forward+backward 实测 per-sample VRAM peak 0.191 GB，naive 32 倍线性外推 6.12 GB，**超过 4 GB target**（Checkpoint 9 launch spec 中 batch=32 < 4 GB）。当时为快速完成 benchmark 用了 `x.repeat(32, 1)` 复制 batch（导致 edge_index 越界 CUDA assert，最终改回单样本测量 + 线性外推）。naive 外推**不代表 Phase 7 真实 batch 显存**：PyG `Batch.from_data_list()` 把多个独立子图合并为一张大图（节点 / 边 index 平移），稀疏邻接 + sparse softmax 会比 naive 复制紧凑得多；TGN memory 也是 per-node-id 共享而非 per-sample 复制。
+
+**为什么是 Phase 7 责任而非 Checkpoint 9 阻塞**：Checkpoint 9 forward 时延 29.57 ms 已达硬目标；显存外推超目标只在 naive 测量条件下成立，真实 PyG Batch 路径未被实测。Checkpoint 10 链路预测仅训练单子图，触不到 batch=32 配置。
+
+**Phase 7 batch sizing sanity gate（强制三步走，禁止省略）**：
+
+1. **第一步：用 PyG `Batch.from_data_list()` 真实合并子图实测 VRAM**。在 `scripts/` 下加专用 bench 脚本（如 `scripts/bench_htgn_batch.py`），用真实 ATLAS S1 K-hop 子图集合（同 Checkpoint 9 复用），构造 `Batch.from_data_list([sub_1, ..., sub_32])` → forward+backward → 记录 `torch.cuda.max_memory_allocated()`。落到 `data/htgn_bench_batch.json` 与 Checkpoint 9 的 `data/htgn_bench.json` 一致风格 commit 进 git。
+2. **第二步：分支决策**：
+   - 实测 ≤ 4 GB → 直接进 Phase 7 batch=32 训练。
+   - 实测 4 GB < x ≤ 12 GB → 启用 PyTorch `torch.utils.checkpoint` gradient checkpointing 包 HGTLayer forward；重测显存。如降至 ≤ 4 GB → batch=32；否则降至兜底 batch=16。
+   - 实测 > 12 GB → 直接 batch=16 兜底 + gradient checkpointing。
+3. **第三步：禁止动作**——在没有真实 `Batch.from_data_list()` 测量的情况下，**禁止**直接配置 batch=32 或更大启动训练；**禁止**用 naive `x.repeat()` 测量结果作为 batch 显存依据；**禁止**通过"关闭 TGN memory" 或"砍 hidden_dim" 等修改架构的方式凑过显存——这些都属"调高 epoch 凑过"类的 bypass，违反 Phase 3 hard gate inviolability 纪律。
+
+如果第二步分支决策走到 batch=16 兜底，需在 PROGRESS.md / CHECKPOINT 11 报告中显式记录"Phase 7 batch size = 16（实测显存约束所致），与 Checkpoint 9 launch spec batch=32 假设差异；对训练稳定性影响在 Phase 11 ablation 中校核"。
+
 ## Phase 8 待办
 
 - **`AtlasGroundTruthLabelLoader` 实现**（2026-05-05 标记，由 Checkpoint 5 引发）。当前 `src/loghetero/data/datamodule.py::benign_only_label_loader` 是 Phase 1.6 stub（所有 event 返回 0），Phase 8 finetune_anomaly mode 需要真实标签。实施步骤：

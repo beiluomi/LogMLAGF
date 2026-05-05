@@ -310,16 +310,10 @@ class TestStandardCoverage:
 
     @pytest.mark.skip(
         reason=(
-            "Cross-batch backward fails even after detach() + reset_state(). "
-            "PyG TGNMemory's internal msg_store retains gradient-bearing "
-            "raw_msg from batch 1 across the boundary; HeteroTGNMemory.detach() "
-            "currently only forwards to per-type TGNMemory.detach() which "
-            "doesn't clear msg_store. Tracked as Phase 7 待办 in "
-            "docs/known_issues.md; not a Checkpoint 9 deliverable since the "
-            "user-required four gradient-sanity tests above all pass on the "
-            "single-batch path. Phase 7 training loop will need either: "
-            "(a) extend HeteroTGNMemory.detach() to clear msg_store, or "
-            "(b) ensure update_state is followed by forward() to drain the queue."
+            "Deferred to Phase 7: PyG TGNMemory.detach() does not clear "
+            "msg_store; reactivate this test after implementing batch-boundary "
+            "msg_store reset in training loop. See "
+            "known_issues.md::Phase 7 待办::TGN msg_store 跨 batch 清理"
         )
     )
     def test_multi_batch_with_detach_runs_cleanly(self) -> None:
