@@ -13,7 +13,21 @@ Per design_decisions.md decision 1 / known_issues.md "ATLAS 数据校验清单":
 the upstream README does not publish per-file checksums, so we fall back to
 byte + line counts. SHA-256 is computed locally and recorded too -- it costs
 nothing to record and lets future re-downloads catch silent corruption.
-"""
+
+WORKFLOW WHEN YOU NEED TO MODIFY RAW DATA (e.g. patch a known format bug)
+========================================================================
+sha256 mismatch will fail-fast on next re-run; the only sanctioned path
+to update the manifest is:
+
+    1) make refresh-manifest      # re-generate data/atlas_manifest.json
+    2) git diff data/atlas_manifest.json   # confirm exactly what changed
+    3) git commit data/atlas_manifest.json with a message naming the
+       reason for the underlying data change
+    4) record the data modification in docs/known_issues.md
+
+Do NOT delete data/atlas_manifest.json and silently re-run this script:
+that loses the audit trail. Use `make refresh-manifest` so the intent is
+explicit in the shell history."""
 
 from __future__ import annotations
 

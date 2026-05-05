@@ -1,0 +1,899 @@
+{
+  "generated_at_utc": "2026-05-05T10:17:27+00:00",
+  "overall": {
+    "success": 2828821,
+    "failed": 2349,
+    "skipped": 43283066,
+    "failure_rate": 0.0008296923180169329
+  },
+  "per_log_type": {
+    "atlas.dns": {
+      "success": 42848,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    "atlas.firefox": {
+      "success": 40445,
+      "failed": 0,
+      "skipped": 42931319,
+      "failure_rate": 0.0
+    },
+    "atlas.security_events": {
+      "success": 2745528,
+      "failed": 2349,
+      "skipped": 351747,
+      "failure_rate": 0.0008548417560174636
+    }
+  },
+  "per_scenario_log_type": [
+    {
+      "scenario": "M1",
+      "log_type": "atlas.dns",
+      "success": 7234,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M1",
+      "log_type": "atlas.firefox",
+      "success": 5698,
+      "failed": 0,
+      "skipped": 5900896,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M1",
+      "log_type": "atlas.security_events",
+      "success": 248604,
+      "failed": 0,
+      "skipped": 14673,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M2",
+      "log_type": "atlas.dns",
+      "success": 7880,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M2",
+      "log_type": "atlas.firefox",
+      "success": 4970,
+      "failed": 0,
+      "skipped": 5337253,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M2",
+      "log_type": "atlas.security_events",
+      "success": 278558,
+      "failed": 0,
+      "skipped": 22197,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M3",
+      "log_type": "atlas.dns",
+      "success": 2926,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M3",
+      "log_type": "atlas.firefox",
+      "success": 2139,
+      "failed": 0,
+      "skipped": 2313090,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M3",
+      "log_type": "atlas.security_events",
+      "success": 341060,
+      "failed": 2349,
+      "skipped": 12767,
+      "failure_rate": 0.006840240063597634
+    },
+    {
+      "scenario": "M4",
+      "log_type": "atlas.dns",
+      "success": 3712,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M4",
+      "log_type": "atlas.firefox",
+      "success": 4083,
+      "failed": 0,
+      "skipped": 4207275,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M4",
+      "log_type": "atlas.security_events",
+      "success": 261941,
+      "failed": 0,
+      "skipped": 12974,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M5",
+      "log_type": "atlas.dns",
+      "success": 6848,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M5",
+      "log_type": "atlas.firefox",
+      "success": 3923,
+      "failed": 0,
+      "skipped": 3352164,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M5",
+      "log_type": "atlas.security_events",
+      "success": 739241,
+      "failed": 0,
+      "skipped": 19337,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M6",
+      "log_type": "atlas.dns",
+      "success": 5922,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M6",
+      "log_type": "atlas.firefox",
+      "success": 4244,
+      "failed": 0,
+      "skipped": 4316396,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "M6",
+      "log_type": "atlas.security_events",
+      "success": 357790,
+      "failed": 0,
+      "skipped": 14595,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S1",
+      "log_type": "atlas.dns",
+      "success": 1368,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S1",
+      "log_type": "atlas.firefox",
+      "success": 2678,
+      "failed": 0,
+      "skipped": 3009141,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S1",
+      "log_type": "atlas.security_events",
+      "success": 94788,
+      "failed": 0,
+      "skipped": 3324,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S2",
+      "log_type": "atlas.dns",
+      "success": 2844,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S2",
+      "log_type": "atlas.firefox",
+      "success": 5158,
+      "failed": 0,
+      "skipped": 6941723,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S2",
+      "log_type": "atlas.security_events",
+      "success": 171345,
+      "failed": 0,
+      "skipped": 239818,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S3",
+      "log_type": "atlas.dns",
+      "success": 2236,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S3",
+      "log_type": "atlas.firefox",
+      "success": 4076,
+      "failed": 0,
+      "skipped": 4140427,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S3",
+      "log_type": "atlas.security_events",
+      "success": 127898,
+      "failed": 0,
+      "skipped": 6149,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S4",
+      "log_type": "atlas.dns",
+      "success": 1878,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S4",
+      "log_type": "atlas.firefox",
+      "success": 3476,
+      "failed": 0,
+      "skipped": 3412954,
+      "failure_rate": 0.0
+    },
+    {
+      "scenario": "S4",
+      "log_type": "atlas.security_events",
+      "success": 124303,
+      "failed": 0,
+      "skipped": 5913,
+      "failure_rate": 0.0
+    }
+  ],
+  "per_scenario_host_log_type": [
+    {
+      "scenario": "M1",
+      "host": "M1_h1",
+      "log_type": "atlas.dns",
+      "success": 3546,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.11
+    },
+    {
+      "scenario": "M1",
+      "host": "M1_h1",
+      "log_type": "atlas.firefox",
+      "success": 5562,
+      "failed": 0,
+      "skipped": 5831275,
+      "failure_rate": 0.0,
+      "elapsed_s": 3.17
+    },
+    {
+      "scenario": "M1",
+      "host": "M1_h1",
+      "log_type": "atlas.security_events",
+      "success": 116028,
+      "failed": 0,
+      "skipped": 6984,
+      "failure_rate": 0.0,
+      "elapsed_s": 6.6
+    },
+    {
+      "scenario": "M1",
+      "host": "M1_h2",
+      "log_type": "atlas.dns",
+      "success": 3688,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.17
+    },
+    {
+      "scenario": "M1",
+      "host": "M1_h2",
+      "log_type": "atlas.firefox",
+      "success": 136,
+      "failed": 0,
+      "skipped": 69621,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.04
+    },
+    {
+      "scenario": "M1",
+      "host": "M1_h2",
+      "log_type": "atlas.security_events",
+      "success": 132576,
+      "failed": 0,
+      "skipped": 7689,
+      "failure_rate": 0.0,
+      "elapsed_s": 7.17
+    },
+    {
+      "scenario": "M2",
+      "host": "M2_h1",
+      "log_type": "atlas.dns",
+      "success": 3800,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.12
+    },
+    {
+      "scenario": "M2",
+      "host": "M2_h1",
+      "log_type": "atlas.firefox",
+      "success": 4803,
+      "failed": 0,
+      "skipped": 5254977,
+      "failure_rate": 0.0,
+      "elapsed_s": 3.05
+    },
+    {
+      "scenario": "M2",
+      "host": "M2_h1",
+      "log_type": "atlas.security_events",
+      "success": 139810,
+      "failed": 0,
+      "skipped": 11249,
+      "failure_rate": 0.0,
+      "elapsed_s": 7.62
+    },
+    {
+      "scenario": "M2",
+      "host": "M2_h2",
+      "log_type": "atlas.dns",
+      "success": 4080,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.12
+    },
+    {
+      "scenario": "M2",
+      "host": "M2_h2",
+      "log_type": "atlas.firefox",
+      "success": 167,
+      "failed": 0,
+      "skipped": 82276,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.05
+    },
+    {
+      "scenario": "M2",
+      "host": "M2_h2",
+      "log_type": "atlas.security_events",
+      "success": 138748,
+      "failed": 0,
+      "skipped": 10948,
+      "failure_rate": 0.0,
+      "elapsed_s": 7.76
+    },
+    {
+      "scenario": "M3",
+      "host": "M3_h1",
+      "log_type": "atlas.dns",
+      "success": 1126,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.05
+    },
+    {
+      "scenario": "M3",
+      "host": "M3_h1",
+      "log_type": "atlas.firefox",
+      "success": 1990,
+      "failed": 0,
+      "skipped": 2232401,
+      "failure_rate": 0.0,
+      "elapsed_s": 1.34
+    },
+    {
+      "scenario": "M3",
+      "host": "M3_h1",
+      "log_type": "atlas.security_events",
+      "success": 142064,
+      "failed": 2349,
+      "skipped": 5885,
+      "failure_rate": 0.016265848642435236,
+      "elapsed_s": 7.64
+    },
+    {
+      "scenario": "M3",
+      "host": "M3_h2",
+      "log_type": "atlas.dns",
+      "success": 1800,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.05
+    },
+    {
+      "scenario": "M3",
+      "host": "M3_h2",
+      "log_type": "atlas.firefox",
+      "success": 149,
+      "failed": 0,
+      "skipped": 80689,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.05
+    },
+    {
+      "scenario": "M3",
+      "host": "M3_h2",
+      "log_type": "atlas.security_events",
+      "success": 198996,
+      "failed": 0,
+      "skipped": 6882,
+      "failure_rate": 0.0,
+      "elapsed_s": 10.36
+    },
+    {
+      "scenario": "M4",
+      "host": "M4_h1",
+      "log_type": "atlas.dns",
+      "success": 2186,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.05
+    },
+    {
+      "scenario": "M4",
+      "host": "M4_h1",
+      "log_type": "atlas.firefox",
+      "success": 3945,
+      "failed": 0,
+      "skipped": 4137977,
+      "failure_rate": 0.0,
+      "elapsed_s": 2.15
+    },
+    {
+      "scenario": "M4",
+      "host": "M4_h1",
+      "log_type": "atlas.security_events",
+      "success": 143098,
+      "failed": 0,
+      "skipped": 6384,
+      "failure_rate": 0.0,
+      "elapsed_s": 7.67
+    },
+    {
+      "scenario": "M4",
+      "host": "M4_h2",
+      "log_type": "atlas.dns",
+      "success": 1526,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.04
+    },
+    {
+      "scenario": "M4",
+      "host": "M4_h2",
+      "log_type": "atlas.firefox",
+      "success": 138,
+      "failed": 0,
+      "skipped": 69298,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.04
+    },
+    {
+      "scenario": "M4",
+      "host": "M4_h2",
+      "log_type": "atlas.security_events",
+      "success": 118843,
+      "failed": 0,
+      "skipped": 6590,
+      "failure_rate": 0.0,
+      "elapsed_s": 6.56
+    },
+    {
+      "scenario": "M5",
+      "host": "M5_h1",
+      "log_type": "atlas.dns",
+      "success": 3454,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.08
+    },
+    {
+      "scenario": "M5",
+      "host": "M5_h1",
+      "log_type": "atlas.firefox",
+      "success": 3621,
+      "failed": 0,
+      "skipped": 3140476,
+      "failure_rate": 0.0,
+      "elapsed_s": 1.72
+    },
+    {
+      "scenario": "M5",
+      "host": "M5_h1",
+      "log_type": "atlas.security_events",
+      "success": 611242,
+      "failed": 0,
+      "skipped": 12561,
+      "failure_rate": 0.0,
+      "elapsed_s": 32.35
+    },
+    {
+      "scenario": "M5",
+      "host": "M5_h2",
+      "log_type": "atlas.dns",
+      "success": 3394,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.07
+    },
+    {
+      "scenario": "M5",
+      "host": "M5_h2",
+      "log_type": "atlas.firefox",
+      "success": 302,
+      "failed": 0,
+      "skipped": 211688,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.12
+    },
+    {
+      "scenario": "M5",
+      "host": "M5_h2",
+      "log_type": "atlas.security_events",
+      "success": 127999,
+      "failed": 0,
+      "skipped": 6776,
+      "failure_rate": 0.0,
+      "elapsed_s": 6.92
+    },
+    {
+      "scenario": "M6",
+      "host": "M6_h1",
+      "log_type": "atlas.dns",
+      "success": 2530,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.07
+    },
+    {
+      "scenario": "M6",
+      "host": "M6_h1",
+      "log_type": "atlas.firefox",
+      "success": 4039,
+      "failed": 0,
+      "skipped": 4221248,
+      "failure_rate": 0.0,
+      "elapsed_s": 2.17
+    },
+    {
+      "scenario": "M6",
+      "host": "M6_h1",
+      "log_type": "atlas.security_events",
+      "success": 157130,
+      "failed": 0,
+      "skipped": 6925,
+      "failure_rate": 0.0,
+      "elapsed_s": 8.56
+    },
+    {
+      "scenario": "M6",
+      "host": "M6_h2",
+      "log_type": "atlas.dns",
+      "success": 3392,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.13
+    },
+    {
+      "scenario": "M6",
+      "host": "M6_h2",
+      "log_type": "atlas.firefox",
+      "success": 205,
+      "failed": 0,
+      "skipped": 95148,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.04
+    },
+    {
+      "scenario": "M6",
+      "host": "M6_h2",
+      "log_type": "atlas.security_events",
+      "success": 200660,
+      "failed": 0,
+      "skipped": 7670,
+      "failure_rate": 0.0,
+      "elapsed_s": 10.63
+    },
+    {
+      "scenario": "S1",
+      "host": "S1",
+      "log_type": "atlas.dns",
+      "success": 1368,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.03
+    },
+    {
+      "scenario": "S1",
+      "host": "S1",
+      "log_type": "atlas.firefox",
+      "success": 2678,
+      "failed": 0,
+      "skipped": 3009141,
+      "failure_rate": 0.0,
+      "elapsed_s": 1.55
+    },
+    {
+      "scenario": "S1",
+      "host": "S1",
+      "log_type": "atlas.security_events",
+      "success": 94788,
+      "failed": 0,
+      "skipped": 3324,
+      "failure_rate": 0.0,
+      "elapsed_s": 5.18
+    },
+    {
+      "scenario": "S2",
+      "host": "S2",
+      "log_type": "atlas.dns",
+      "success": 2844,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.09
+    },
+    {
+      "scenario": "S2",
+      "host": "S2",
+      "log_type": "atlas.firefox",
+      "success": 5158,
+      "failed": 0,
+      "skipped": 6941723,
+      "failure_rate": 0.0,
+      "elapsed_s": 3.63
+    },
+    {
+      "scenario": "S2",
+      "host": "S2",
+      "log_type": "atlas.security_events",
+      "success": 171345,
+      "failed": 0,
+      "skipped": 239818,
+      "failure_rate": 0.0,
+      "elapsed_s": 11.6
+    },
+    {
+      "scenario": "S3",
+      "host": "S3",
+      "log_type": "atlas.dns",
+      "success": 2236,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.05
+    },
+    {
+      "scenario": "S3",
+      "host": "S3",
+      "log_type": "atlas.firefox",
+      "success": 4076,
+      "failed": 0,
+      "skipped": 4140427,
+      "failure_rate": 0.0,
+      "elapsed_s": 2.16
+    },
+    {
+      "scenario": "S3",
+      "host": "S3",
+      "log_type": "atlas.security_events",
+      "success": 127898,
+      "failed": 0,
+      "skipped": 6149,
+      "failure_rate": 0.0,
+      "elapsed_s": 7.09
+    },
+    {
+      "scenario": "S4",
+      "host": "S4",
+      "log_type": "atlas.dns",
+      "success": 1878,
+      "failed": 0,
+      "skipped": 0,
+      "failure_rate": 0.0,
+      "elapsed_s": 0.04
+    },
+    {
+      "scenario": "S4",
+      "host": "S4",
+      "log_type": "atlas.firefox",
+      "success": 3476,
+      "failed": 0,
+      "skipped": 3412954,
+      "failure_rate": 0.0,
+      "elapsed_s": 1.82
+    },
+    {
+      "scenario": "S4",
+      "host": "S4",
+      "log_type": "atlas.security_events",
+      "success": 124303,
+      "failed": 0,
+      "skipped": 5913,
+      "failure_rate": 0.0,
+      "elapsed_s": 6.75
+    }
+  ],
+  "security_events_eventid_histograms": {
+    "M1/M1_h1": {
+      "4656": 39433,
+      "4658": 37244,
+      "4663": 37285,
+      "4690": 379,
+      "4688": 122,
+      "4660": 1440,
+      "4689": 125
+    },
+    "M1/M1_h2": {
+      "4658": 43275,
+      "4663": 42826,
+      "4656": 45114,
+      "4660": 453,
+      "4690": 604,
+      "4688": 163,
+      "4689": 141
+    },
+    "M2/M2_h1": {
+      "4663": 43950,
+      "4656": 48362,
+      "4658": 45687,
+      "4690": 362,
+      "4688": 110,
+      "4660": 1227,
+      "4689": 112
+    },
+    "M2/M2_h2": {
+      "4658": 45008,
+      "4663": 45025,
+      "4656": 47502,
+      "4660": 464,
+      "4689": 116,
+      "4690": 496,
+      "4688": 137
+    },
+    "M3/M3_h1": {
+      "4658": 46724,
+      "4663": 45161,
+      "4656": 48756,
+      "4690": 448,
+      "4688": 139,
+      "4660": 725,
+      "4689": 111
+    },
+    "M3/M3_h2": {
+      "4658": 65853,
+      "4663": 64159,
+      "4656": 67641,
+      "4660": 480,
+      "4689": 138,
+      "4690": 566,
+      "4688": 159
+    },
+    "M4/M4_h1": {
+      "4656": 48675,
+      "4658": 46135,
+      "4663": 46024,
+      "4660": 1476,
+      "4689": 122,
+      "4690": 516,
+      "4688": 150
+    },
+    "M4/M4_h2": {
+      "4663": 38395,
+      "4656": 40462,
+      "4658": 38874,
+      "4660": 355,
+      "4689": 117,
+      "4690": 502,
+      "4688": 138
+    },
+    "M5/M5_h1": {
+      "4656": 222575,
+      "4663": 165164,
+      "4658": 221621,
+      "4660": 987,
+      "4689": 146,
+      "4690": 600,
+      "4688": 149
+    },
+    "M5/M5_h2": {
+      "4658": 41752,
+      "4663": 41978,
+      "4656": 43005,
+      "4660": 570,
+      "4690": 451,
+      "4689": 114,
+      "4688": 129
+    },
+    "M6/M6_h1": {
+      "4658": 50630,
+      "4663": 50966,
+      "4656": 53159,
+      "4660": 1517,
+      "4689": 137,
+      "4690": 557,
+      "4688": 164
+    },
+    "M6/M6_h2": {
+      "4663": 64309,
+      "4656": 68278,
+      "4658": 66558,
+      "4660": 554,
+      "4689": 165,
+      "4690": 610,
+      "4688": 186
+    },
+    "S1/S1": {
+      "4663": 29404,
+      "4656": 32600,
+      "4658": 31319,
+      "4660": 965,
+      "4690": 299,
+      "4688": 98,
+      "4689": 103
+    },
+    "S2/S2": {
+      "4658": 52323,
+      "4663": 58183,
+      "4656": 57736,
+      "4690": 893,
+      "4688": 318,
+      "4660": 1600,
+      "4689": 292
+    },
+    "S3/S3": {
+      "4658": 41044,
+      "4663": 41934,
+      "4656": 42822,
+      "4660": 1360,
+      "4690": 495,
+      "4688": 134,
+      "4689": 109
+    },
+    "S4/S4": {
+      "4658": 40143,
+      "4663": 40759,
+      "4656": 41634,
+      "4690": 420,
+      "4688": 113,
+      "4660": 1150,
+      "4689": 84
+    }
+  }
+}
