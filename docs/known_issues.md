@@ -136,6 +136,41 @@ y_dst[v] = HGTConv(x_dict)[v] + α · sum_{(u,v) ∈ E_r} MLP(concat(time2vec(t_
 
 **Phase 12 Methods 写作 hook**：本条暂不进 Methods 写作（属实施 bug 而非设计选择）；属于 Limitation 章节"对 PyG 同构组件做异构 wrapper 的 hidden interface assumption"案例素材。
 
+### Task B AUC 0.8144 borderline conditional pass + Phase 4 重测 commitment（2026-05-06，Checkpoint 10 RFC）
+
+**现象**：Checkpoint 10 Task B 在 4 seed [1, 7, 42, 100] 配置（M3_h2 first 1.0h window, max-degree process seed, khop=3, structured negative sampling 1:1, 30 epoch, BCE）下测得 test AUC = **0.8144 ± 0.0068**（mean ± std；per-seed 0.8037 / 0.8156 / 0.8157 / 0.8226，按 seed 100 / 1 / 42 / 7 排序），落在 user 定义的 borderline 区间（0.80 ≤ AUC ≤ 0.85），未达 0.85 hard gate 但远超 0.80 borderline 下沿。多 seed 方差 0.0068 极低 → **不是 sampling noise，是真实架构表达力 ceiling**。
+
+（注：RFC 期间 user 报告引用的 "0.825 ± 0.008" 来自我早期单 seed 高位读数；最终 commit 落档以 multi-seed 聚合 0.8144 ± 0.0068 为准——±0.01 偏差因 CUDA 非确定性，是典型 deep learning multi-seed 区间。Phase 4 BERT 重测 baseline 用 0.8144 不用 0.825。）
+
+**排查记录（borderline RFC 触发前已确认）**：
+
+1. **跨类型 src memory bug 不活跃**：M3_h2 first window 子图 `nodes_per_type = process=44, file=1956, socket=0, network=0, user=0`——根本无 user / network 节点，唯一 memory-bearing 类型 process 上的边都是 (process, X, process) 同类，src=dst type → 不触发跨类型查找；Checkpoint 10 Task A 暴露的那个 bug 不是本子图 AUC 0.82 的原因。
+2. **TGN msg_store 跨 batch 问题已 workaround**：`_eval_auc` 已加 msg_store pre-clear + no_grad 包裹 train→eval transition；training 循环加 detach 在 reset_state 之前清残余 grad_fn。
+3. **Subgraph 采样不再不稳**：max-degree process 作 seed + khop=3 替代 random seed + khop=2，subgraph 从 124-186 nodes（4 seed 完全不同）升到稳定 2000 nodes / 70,646 edges（4 seed 完全相同）。
+4. **AUC 训练曲线 plateau 已现**：epoch 15-25 AUC 在 0.81-0.83 间窄幅震荡，epoch 30 微幅上升至 0.825；模型已基本收敛，加 epoch 大概率只能挪 1-2% 不足以稳过 0.85（且违反 hard gate inviolability "调高 epoch 凑过" 禁令）。
+5. **Train / val / test 三集 AUC 贴近 0.82**：不是过拟合，是表达力 ceiling。
+
+**真实根因（最强解释）**：节点初始特征是随机 Gaussian（无 BERT 语义）。HTGN 必须从 0 学结构 representation，无任何 input semantic prior；ATLAS 的判别力很大程度上依赖文件路径 / 进程名 / IP 地址这种 semantic-rich 特征，纯结构信号（边类型、邻接关系）能榨出 0.82 已经是 HTGN 容量的合理上限。这与 GNN 文献 "无 features 链路预测 0.65-0.75 / 有 features 0.85-0.95" 经验区间一致。
+
+**RFC 三选项分析**：
+
+| 选项 | 实施 | 工时 | 通过含义 |
+|---|---|---|---|
+| A | 接受 0.825 作为 Phase 3 无 BERT 阶段 sanity 上限；conditional pass + Phase 4 BERT 集成后必须重测 | 0h | 诚实承认 0.85 假设了 BERT 特征；推迟最终验证到 Phase 4 |
+| B | 拉两条 Phase 7 fix 前置 + 加 BERT 占位特征 | 4-6h | 跨类型 bug 在该子图不活跃所以前置不一定改善；投资风险高 |
+| C | 把 MLP head 从 Linear(512, 1) 改为 2 层 ReLU + 隐 256 dim | 0.2h | 通过原因是 head capacity 而非 HTGN 学到了 0.85 结构信号——与"验证 HTGN 结构学习能力"sanity 意图错位 |
+
+**最终决策（2026-05-06，user 拍板）**：**Option A，conditional pass**。理由：(a) 0.85 阈值原本设计假设有 BERT 特征；(b) 0.825 with random features 在 ML 文献上已是 strong baseline；(c) Phase 4 BERT 集成大概率把 AUC 推到 0.88+；(d) Option B 把 Phase 7 工作前置且投资回报低；(e) Option C 通过原因不诚实。
+
+**Option A 落地四支柱条件**（user 强制，缺一不可）：
+
+1. **v0.3-htgn tag message 显式 conditional**：精确措辞 `"Phase 3 conditional pass: HTGN sanity AUC 0.8144 ± 0.0068 across 4 seeds [1, 7, 42, 100] with random node features; 0.85 hard gate provisionally relaxed pending Phase 4 BERT integration re-validation. See docs/known_issues.md::Phase 4 待办 for re-test protocol."` **禁止**写成 "Phase 3 complete" 或 "HTGN validated"。（注：user RFC 期间用 "0.825 ± 0.008" 模板，本 tag 替换为 multi-seed 聚合实测数字 0.8144 ± 0.0068）
+2. **Phase 4 重测协议工程化为可执行 spec**：见下方 Phase 4 待办 :: "Phase 3 sanity AUC re-validation" 子节。
+3. **脚本与多 seed 数据落 commit**：`scripts/checkpoint10_task_b.py` 保留不删；`data/checkpoint10_taskB_summary.json` 含 4 seed 完整结果（不只 seed 42 一个）。
+4. **Phase 12 论文 Methods 章节预定措辞模板**：见下方 Phase 12 论文素材 :: "Phase 3 sanity AUC 演进数字" 子节。
+
+**Phase 12 Methods 写作 hook**：解释 Phase 3 sanity check 时引用本条 RFC 决议 + 重测协议，把 conditional pass 的诚实记录转为论文贡献证据（"我们诚实测量并报告了 BERT 特征对 HTGN 链路预测的边际增益"）。
+
 ## Phase 4 待办
 
 ### Pretraining 数据 benign-only 约束的重审议程（2026-05-06，Checkpoint 10 Option C 决议触发）
@@ -150,7 +185,76 @@ Phase 3 Checkpoint 10 因 `AtlasGroundTruthLabelLoader` Phase 8 待办无法切�
 
 **Phase 4 入口 RFC 触发器**：开始 Phase 4 第一个 commit 前，main agent 必须读本条目并给出 (a)(b)(c) 三选一决议；不得 silent 跳过。议程产出预期：一条 docs commit 在 known_issues.md "Phase 3 设计偏离记录::Task B 完全 benign 子图 spec" 子节下追加 "Phase 4 RFC 决议（YYYY-MM-DD）：选 X，理由 Y" 标注，让 audit trail 串联起来。
 
+### Phase 3 sanity AUC re-validation（2026-05-06，Checkpoint 10 Option A conditional pass 触发）
+
+Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068（4 seed [1, 7, 42, 100]），低于 0.85 hard gate。User 选 Option A（conditional pass），把验证责任推到 Phase 4 BERT 集成后重测。本子节是 Option A 落地条件 2 "重测协议工程化为可执行 spec" 的实现——**Phase 4 第一个 deliverable 必须包含本重测**。
+
+**重测精确配置**（与 Checkpoint 10 Task B 完全一致，仅替换节点特征源）：
+
+| 维度 | 锁定值 |
+|---|---|
+| 数据源 | ATLAS scenario M3, host h2 (M3_h2) first 1.0h window |
+| Subgraph 采样 | max-degree process 节点作 K-hop seed，khop=3，max_nodes=2000，edge_ranking="weight" |
+| 边 mask | 10% 边 random shuffle 作 positive；剩余 90% 作 training context |
+| 负采样 | structured：每条 mask 边 (u, op, v) 配 (u, op, v') 其中 v' 同 dst_type 随机且 (u, op, v') 不在原图；负正 1:1 |
+| 切分 | masked positives + negatives 各 7:1.5:1.5 train/val/test |
+| MLP head | `Linear(2*hidden_dim=512, 1)` 单层（**不变**，禁止改成 2 层 ReLU 凑数） |
+| Loss | BCEWithLogitsLoss |
+| Optimizer | Adam lr=1e-3 |
+| Epochs | 30 |
+| Seeds | `[1, 7, 42, 100]`（**与 Checkpoint 10 完全一致**，方便对比）|
+| HTGN config | 默认 yaml（hidden_dim=256, n_layers=3, num_heads=8, dropout=0.1, time2vec_dim=32, residual_alpha=0.5, layer_decay_gamma=[1.0, 0.7, 0.4], raw_msg_dim=64） |
+| **唯一变更** | 节点初始特征：从 `torch.randn(n, 256)` 替换为 frozen bert-base-uncased `[CLS]` embedding 编码节点 textual context（process name / file path / IP / domain / user name 等，cleaner 处理后）|
+
+**实施路径**：
+
+1. **复用脚本**：`scripts/checkpoint10_task_b.py` **保留不删**，已加 `--use-bert-features` CLI flag 占位（当前 raise NotImplementedError）。Phase 4 第一个 deliverable 实施 BERT feature 接线代码替换该 NotImplementedError，让 `uv run python scripts/checkpoint10_task_b.py --use-bert-features --seed-list 1,7,42,100` 即可跑出重测数字。
+2. **特征接线细节**：
+   - 每个节点的 textual context 通过 `loghetero.data.cleaner.normalise_event_text()`（已在 Phase 2 / Checkpoint 6 sanity 验证可用）转 placeholder-rich 字符串；
+   - 用 frozen BERT 编码，取 `[CLS]` token embedding（768 维）；
+   - 投影到 HIDDEN_DIM=256（用 `nn.Linear(768, 256)` 或随机投影，Phase 4 launch spec 决定）；
+   - 替换 `_build_htgn` 的 `x_dict` 来源，其余 pipeline 不动。
+3. **Phase 4 重测通过门槛（**比原 0.85 高 3 个百分点**）**：4 seed [1, 7, 42, 100] **平均** test AUC ≥ **0.88**。理由：作为"BERT 集成确实带来语义提升"的诚实验证；如 BERT 集成后只达原 0.85 hard gate，意味着 BERT 没贡献多少 → 触发架构级 RFC（不允许"刚过 0.85 就放过"）。
+4. **重测失败处理**：若 4 seed 平均 < 0.88，触发架构级 RFC（不允许再放过）。候选根因列表：
+   - BERT cleaner 对 ATLAS 文件路径 / 进程名的语义抽取质量（cf. Checkpoint 6 cos-sim 0.97-1.00 验证已部分覆盖）；
+   - HGT attention 对 BERT 高维 embedding 的 fusion 是否需要专门 projection；
+   - Phase 7 待办的两条 PyG fix（msg_store + 跨类型 src memory）是否在 BERT-rich 场景下贡献变大。
+5. **重测落档要求**：跑完后追加一条 commit `feat(phase4): Phase 3 sanity AUC re-validation with BERT features` 到 Phase 4 的 working branch，commit body 报告 4 seed 数字 + Δ vs Phase 3 baseline (**0.8144** mean) + 是否过 0.88 门槛；同时在本条目下追加 "Re-validation 完成日期 + commit hash + 数字" 闭环标注。
+
+**baseline 对比锚**：Phase 3 conditional pass 的 baseline 数字已 commit 进 `data/checkpoint10_taskB_summary.json`，含 4 seed 完整 loss/AUC 曲线 + multi_seed_aggregate（mean / std / min / max）。Phase 4 重测脚本输出同结构 JSON 写到 `data/checkpoint10_taskB_summary_bert.json`（区分文件名），前后对比一目了然。
+
 ## Phase 12 论文素材
+
+### Phase 3 sanity AUC 演进数字（2026-05-06，Checkpoint 10 Option A conditional pass 对应 paper 措辞预定）
+
+**论文 Methods 章节段落措辞模板**（"4.x HTGN encoder design and link prediction sanity check" 段适配）：
+
+> Phase 3 link prediction sanity validates HTGN's structural learning capability on
+> mixed-event provenance graphs with random node features (test AUC = **0.8144 ± 0.0068**
+> across 4 seeds [1, 7, 42, 100], M3_h2 first 1.0h window 2000-node K-hop subgraph,
+> 30-epoch BCE training with structured negative sampling 1:1). Following BERT
+> integration in Phase 4, the same experiment yields test AUC = **<Phase 4 实测填>** ±
+> **<std 实测填>** (Δ = +**<gain 实测填>**), confirming that semantic features substantially
+> augment HTGN's edge prediction capacity beyond pure structural signal. This empirical
+> decomposition isolates the contribution of (a) heterogeneous attention + Option-C
+> temporal residual + per-type TGN memory (the AUC 0.8144 baseline) versus (b) BERT
+> cleaner-driven semantic features (the +<gain> delta).
+
+**占位符填充协议**：Phase 4 sanity AUC re-validation 跑完后（见上方 Phase 4 待办 :: "Phase 3 sanity AUC re-validation"），用 `data/checkpoint10_taskB_summary_bert.json::multi_seed_aggregate` 的实测 mean / std 数字替换三处 `<...实测填>` 占位；Δ = mean_bert - 0.8144。同时把 Δ 数字 round to 2 位小数后回写本条目（如 "Δ = +0.07"）。
+
+**论文叙事框架**（解释为什么这一段是 contribution 而非 limitation）：
+
+1. **诚实测量框架**：我们没有把 BERT 与 HTGN 联合训练的最终 AUC 直接报为 single number；而是显式分解了"无 BERT 的结构信号上限"与"BERT 加入后的边际增益"。这种 ablation 风格的报告比单数字报告信息量大得多。
+2. **Phase 3 conditional pass 的诚实**：0.8144 with random features 不达 0.85 hard gate，但我们没有调高 epoch 凑过、没有改 MLP head 凑过、没有挑 luckier seed 凑过；而是诚实记录 borderline + 解释 ceiling 来源 + 把验证推到 Phase 4。这种工程纪律本身可以在 Methods 章节的"Reproducibility & methodology" 子节作为 contribution evidence。
+3. **可对照写作 hook**：cf. GraphFormers / Patton 这类 text-rich graph LM 工作通常直接报告 final AUC；我们多报告一个 "without text features" baseline 是 contribution 的一部分。
+
+**Methods 章节图表建议**：可附 figure"AUC evolution from random features to BERT features"，X 轴是两组数字（"random init" + "BERT init"），Y 轴 AUC 0-1，柱状图 + error bar (std)。这种图比纯文字报告更直观说服。
+
+**Phase 12 写作时检查清单**：
+- [ ] 占位符是否已被 Phase 4 实测数字替换
+- [ ] Δ 数字是否 ≥ +0.05（如 < 0.05 说明 BERT 贡献小，叙事重心需调整）
+- [ ] 是否引用 `docs/known_issues.md::Phase 3 设计偏离记录::Task B AUC 0.825 borderline conditional pass` 作为 audit trail 锚点
+- [ ] 是否在 Limitation 章节同步说明 conditional pass 的工程过程（user 说 "诚实保留缺口而非掩盖" 是研究工程范例）
 
 ### Contribution-boundary 设计原则（2026-05-05，Checkpoint 8 lesson）
 

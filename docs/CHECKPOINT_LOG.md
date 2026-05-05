@@ -271,4 +271,103 @@
 
 ---
 
-*下一条记录：Phase 3 / Checkpoint 10（玩具图节点分类 + ATLAS 链路预测预热 AUC > 0.85 硬门槛 → tag `v0.3-htgn`）。*
+## Checkpoint 10 — Phase 3.5+3.6 HTGN validation（玩具图节点分类 hard-gate pass + ATLAS 链路预测 conditional pass，→ tag `v0.3-htgn`）
+
+- **完成日期**：2026-05-06
+- **Commit**：（本次 commit；hash 在 git log 可见）+ merge commit 含 `v0.3-htgn` tag
+
+### 核心交付物
+
+#### Task A — 玩具异构图节点分类 sanity check（**HARD-GATE PASS**）
+
+- `scripts/checkpoint10_task_a.py`：~50 节点玩具异构图（5 类 process / file / socket / network / user，比例 15:15:8:7:5）+ 7 类边（覆盖典型 triple：process→file_read→file / process→file_write→file / process→net_connect→network / process→net_send_socket→socket / process→net_recv_socket→socket / process→process_fork→process / user→user_logon→process）。**Sub-agent dispatched** (multi-agent path, parallel with main agent's Task B work)。
+- 节点二分类 label rule：process 节点 label=1 iff 至少有 2 个 incoming USER_LOGON 边（同 spec 例 "outgoing FILE_WRITE" 改为 incoming，因 PyG HGTConv 沿 src→dst 传播信息，outgoing 路径无法在单 hop 内自然聚合；spec 显式授权 "Anything HTGN can plausibly learn from neighborhood structure"，sub-agent flag 该 deviation 在 script docstring）。
+- 50 epoch full-batch Adam(lr=1e-3) + Linear classifier head；最终 **loss 0.034**（target < 0.05 ✓）+ **train accuracy 1.000**（target ≥ 0.95 ✓）。
+- HTGN params 4,970,807 + classifier head 514；wall 41.7s on CPU。
+- `data/checkpoint10_taskA_summary.json`（committed）：spec + result + loss/acc 50-epoch curves。
+- `data/processed/checkpoint10_taskA_loss.png`（gitignored）。
+
+#### Task B — ATLAS M3_h2 链路预测（**CONDITIONAL PASS**, AUC 0.8144 ± 0.0068）
+
+- `scripts/checkpoint10_task_b.py`：M3_h2 first 1.0h window（73,996 events / full graph 3325 nodes / 70k edges）→ K-hop subgraph at max-degree process node, khop=3, max_nodes=2000 → 稳定 2000 nodes / 70,646 edges / 901 mask 边 (10%) / 1:1 structured negative sampling / 7:1.5:1.5 train/val/test 切分 / `Linear(2*hidden_dim=512, 1)` 单层 MLP head + BCEWithLogitsLoss / 30 epoch Adam(lr=1e-3) / 4 seed [1, 7, 42, 100] 聚合。
+- `data/checkpoint10_taskB_summary.json`（committed）：4 seed 完整 loss / train_auc / val_auc / test_auc 曲线 + multi_seed_aggregate (mean, std, min, max) + 工程 workaround 列表 + Phase 4 重测 hook 引用。
+- `data/processed/checkpoint10_taskB_{loss_auc,roc}_seed{N}.png`（4×2 = 8 文件，gitignored）。
+- 加 `--use-bert-features` CLI flag 占位（当前 raise NotImplementedError + 引用 `known_issues.md::Phase 4 待办::Phase 3 sanity AUC re-validation`），Phase 4 第一个 deliverable 直接复用本脚本。
+
+### 关键 metric
+
+- **Task A**：loss 0.034 / acc 1.000 / 50 epoch / 41.7s wall（CPU）
+- **Task B**：4-seed test AUC = **0.8144** mean / **0.0068** std / **0.8037** min / **0.8226** max（seed 100 / 1 / 42 / 7 分别 0.8037 / 0.8156 / 0.8157 / 0.8226）。每 seed ~50s wall on CUDA；total wall 201.5s。**注**：multi-seed 聚合数字与早期 RFC 期间报告的 "AUC 0.825" 单 seed 高位读数有 ~0.01 偏差，根因 CUDA matmul 算法非确定性（典型 deep learning multi-seed run-to-run variation）。Phase 4 BERT 重测 baseline 以本聚合数字 0.8144 ± 0.0068 为准（不是 RFC 时报告的 0.825）。
+- **测试 + lint**：本 checkpoint 不新增 unit test（Task A/B 是 driver scripts，由 reproducibility anchor JSON 把结果钉死）；`uv run ruff check` 全绿；189 既有测试仍 pass。
+
+### 决策点
+
+#### Task B AUC borderline → Option A conditional pass（**user 拍板**）
+
+- **借线 borderline 触发**：4-seed 平均 AUC 0.8144 落在 user 定义 borderline 区间 (0.80 ≤ AUC ≤ 0.85)，未达 0.85 hard gate。多 seed 方差 0.0068 极低 → 真实架构 ceiling，非 sampling noise。
+- **排查记录**：(a) 跨类型 src memory bug 在 M3_h2 子图不活跃（subgraph 无 user / network 节点，process 间边都是同类）；(b) TGN msg_store 跨 batch 问题已 workaround（详见下方）；(c) subgraph 采样从 random seed + khop=2（124-186 nodes 不稳）升到 max-degree seed + khop=3（稳定 2000 nodes）；(d) AUC 训练曲线 plateau 已现，模型基本收敛，加 epoch 大概率只能挪 1-2%。
+- **真实根因（最强解释）**：节点初始特征是随机 Gaussian（无 BERT 语义）。HTGN 必须从 0 学结构 representation，无 input semantic prior；ATLAS 判别力很大程度上依赖文件路径 / 进程名 / IP semantic-rich 特征。0.82 with random features 在 ML 文献 "无 features 链路预测 0.65-0.75 / 有 features 0.85-0.95" 经验区间已是上限。
+- **三选项 RFC**（详见 `known_issues.md::Phase 3 设计偏离记录::Task B AUC 0.825 borderline conditional pass`）：A 接受 0.825 + Phase 4 BERT 集成后重测 / B 拉两条 Phase 7 fix 前置 + 加 BERT 占位 / C 改 MLP head 为 2 层 ReLU 凑数。**user 选 Option A**，附四支柱锁死条件。
+- **Option A 落地四支柱条件**（user 强制，本 commit 实现全部）：
+  1. **v0.3-htgn tag message 显式 conditional**：精确措辞 "Phase 3 conditional pass: HTGN sanity AUC 0.8144 ± 0.0068 across 4 seeds [1, 7, 42, 100] with random node features; 0.85 hard gate provisionally relaxed pending Phase 4 BERT integration re-validation. See docs/known_issues.md::Phase 4 待办 for re-test protocol." （注：user RFC 期间用 "0.825 ± 0.008" 措辞模板，本 commit 替换为最终 multi-seed 聚合实测数字 0.8144 ± 0.0068；±0.01 偏差因 CUDA 非确定性，不影响 conditional pass 决议）
+  2. **Phase 4 重测协议工程化为可执行 spec**：`known_issues.md::Phase 4 待办::Phase 3 sanity AUC re-validation` 锁定完整配置（M3_h2 first 1.0h window / max-degree seed / khop=3 / structured neg 1:1 / Linear(512,1) head / 30 epoch / 4 seed [1,7,42,100]），唯一变更 Gaussian → BERT [CLS] embedding；脚本复用；新硬门槛 4-seed 平均 AUC ≥ 0.88（比原 0.85 高 3pp 验证 BERT 实际贡献）。
+  3. **脚本 + 多 seed 数据落 commit**：`scripts/checkpoint10_task_b.py` 与 `data/checkpoint10_taskB_summary.json` 含 4 seed 完整结果（不只 seed 42 一个），本 commit 落档。
+  4. **Phase 12 Methods 章节预定措辞模板**：`known_issues.md::Phase 12 论文素材::Phase 3 sanity AUC 演进数字` 子节给出 conditional pass → BERT 增益叙事框架（"我们诚实测量并报告 BERT 特征对 HTGN 链路预测的边际增益" 转 conditional 为 contribution）。
+
+#### Cross-type src memory bug（Checkpoint 9 oversight 由 Task A 暴露）
+
+- PyG `IdentityMessage` concatenates `[memory[src], memory[dst], t_enc, raw_msg]`——访问 memory[src]；HeteroTGNMemory 跨类型边（如 `(user, USER_LOGON, process)`）路由到 `process_memory.update_state(src=user_idx, ...)` 时 user_idx 被解读为 process_memory 的 slot index——索引混淆。
+- Task A workaround：`num_nodes_per_type[memory_types] = max-across-types` 避免 OOB；语义 noise 但 HGT 主路径 85% 参数主导让模型仍可学。
+- Task B 子图无 user / network 节点，**该 bug 不活跃**——不是 Task B AUC 0.82 的根因。
+- Phase 7 待办列出三 fix 路径：Path A wrapper-side 改 HeteroTGNMemory.update_state 跨类型时 src→dst 替换（推荐，~3 行）/ Path B 自定义 message function / Path C per-(src,dst) msg_store。详见 `known_issues.md::Phase 7 待办::HeteroTGNMemory 跨类型 src 索引语义 proper fix`。
+
+#### TGN msg_store 跨 batch + train→eval transition 双坑（Task B 实测发现）
+
+- Checkpoint 9 已 documented 单 msg_store 跨 batch 持有梯度（Phase 7 待办）；Task B 实测又发现一坑：**PyG `train(False)` 在 .eval() 转换时调 `_update_memory(arange)` 会把 grad-bearing raw_msg 从 msg_store 刷到 self.memory**——若该 .eval() 没在 no_grad 内，self.memory 就持有上 batch 已 freed graph 的 grad refs；下 epoch backward 报 "trying to backward second time"。
+- Task B workaround（`_eval_auc` 函数内）：(a) `htgn.tgn_memory._mem.values()` 各 `_reset_message_store()` pre-clear msg_store；(b) `with torch.no_grad():` 包裹 `htgn.eval()` + `head.eval()` + 后续 forward；(c) 训练循环 `htgn.tgn_memory.detach()` 在 `reset_state()` **之前**调用，避免 in-place `zero_()` 保留 grad_fn 引发的残余梯度图。
+- 三处 inline 注释引用 `known_issues.md::Phase 7 待办::TGN msg_store 跨 batch 清理`，Phase 7 实施 Path A fix 后即可清理这三处 workaround。
+
+#### M3_h2 vs 全 ATLAS 选择 + benign-only 重审
+
+- M3_h2 选择确认（cf. Checkpoint 4 数据）：1.0h 窗口 mean 50,095 events / median 38,490，中等密度代表性，避开 M5_h1 右尾 (123k mean) + S2 长尾 (median 2776 / max 135k)。
+- benign-only 约束放宽（user 选 Option C）：fold stats 显示 `attack_count=0` 是 Phase 8 stub 缘故，无法在 v0.1-data 范围内识别真攻击；放宽要求改为"任选 ATLAS 子图"，benign-only 推到 Phase 4 入口讨论。报告措辞精确改为 "mixed subgraph (predominantly benign with unverified attack fraction; Phase 8 ground-truth label loader not yet wired in v0.1-data)"。详见 `known_issues.md::Phase 3 设计偏离记录::Task B "完全 benign 子图" spec`。
+
+#### Multi-agent 并行实施
+
+- Task A 由后台 sub-agent 实施（spec 完全 lock，与 Task B 数据 / 训练循环独立，无文件 race condition）；主 agent 同步实施 Task B + benign-only RFC + cross-type bug 文档。
+- Task B AUC borderline RFC 期间，Task A sub-agent 在背景跑（独立 spec），不阻塞 RFC 时间。
+- Checkpoint 10 收尾阶段第二轮 multi-agent：sub-agent 跑 4-seed 重测 + 加 `--use-bert-features` 占位 + 聚合 JSON，主 agent 同步做三处 known_issues 更新 + PROGRESS 覆写 + CHECKPOINT_LOG 追加。
+
+### 新增 known_issues 条目
+
+1. `Phase 3 设计偏离记录` 追加两条：(a) Task B "完全 benign 子图" Option C 决议（详见上方 benign-only 段）；(b) HeteroTGNMemory 跨类型 src 索引语义错误 + workaround；(c) Task B AUC 0.825 borderline → Option A conditional pass 完整 RFC 决议四支柱条件。
+2. `Phase 4 待办` 新增子节：(a) Pretraining 数据 benign-only 约束重审议程（Option C 触发）；(b) Phase 3 sanity AUC re-validation 工程化 spec（Option A 触发，含完整重测配置 + 新 0.88 硬门槛）。
+3. `Phase 7 待办` 追加 HeteroTGNMemory 跨类型 src 索引 proper fix 三路径（Path A/B/C）。
+4. `Phase 12 论文素材` 追加 Phase 3 sanity AUC 演进数字子节（Methods 章节措辞模板 + 占位符填充协议）。
+
+### PROGRESS.md / CHECKPOINT_LOG.md 更新
+
+本 commit 同时整体覆写 PROGRESS.md（Phase 3 完成 4/4，commit chain 至 #23 + #24 merge，标记 conditional pass）+ 追加本条 CHECKPOINT_LOG.md 记录。
+
+### 执行 Checkpoint 10 launch spec 完成清单
+
+- [x] Task A 玩具异构图 5 类节点 / 7 类边 / ~50 节点 / 节点二分类 / 50 epoch loss < 0.05 ✓ (0.034)
+- [x] Task A train accuracy ≥ 95% ✓ (100%)
+- [x] Task B M3_h2 first 1.0h window 选定（避开 outlier）
+- [x] Task B 10% 边 mask + structured negative sampling 1:1（同 dst_type, 不在原图）
+- [x] Task B 7:1.5:1.5 train/val/test 切分
+- [x] Task B Linear(2*hidden_dim=512, 1) 单层 MLP head + BCE + 30 epoch + Adam(lr=1e-3)
+- [x] Task B 4 seed [1, 7, 42, 100] 多 seed 实测（mean 0.8144 / std 0.0068）
+- [ ] Task B test AUC > 0.85 hard gate ✗ — **conditional pass per Option A (user 决议 2026-05-06)**，4 支柱条件全部落地
+- [x] Task A + Task B 可视化输出（matplotlib png 落 data/processed/ gitignored）+ summary JSON 落 data/ committed
+- [x] PROGRESS.md / CHECKPOINT_LOG.md / known_issues.md 同步更新
+- [x] v0.3-htgn tag 含 conditional pass 精确 message
+- [x] merge feat/03-htgn-encoder → main + push --tags
+
+### Phase 3 完整收尾
+
+Phase 3 跨 4 个 checkpoint（7-10）、~10 commits、~3000 行代码（HTGN 框架 + 4 个测试文件 + 2 个 driver 脚本 + 1 个 benchmark 脚本）、4 条主要设计偏离记录构成完整 audit trail。**conditional pass 状态由四支柱锁死，Phase 4 第一个 deliverable 必须执行 sanity AUC re-validation 才能闭环**。
+
+---
+
+*下一条记录：Phase 4 / Checkpoint 11 启动（跨模态注意力 launch spec + Phase 4 入口两个 RFC 决议：benign-only 重审 + Phase 3 sanity AUC re-validation）。*
