@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+.uv/
+
+# Test/lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Hydra outputs
+outputs/
+multirun/
+.hydra/
+
+# Logs
+logs/
+*.log
+
+# W&B / TensorBoard
+wandb/
+runs/
+events.out.tfevents.*
+
+# Checkpoints / model artifacts
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# DVC
+.dvc/cache/
+.dvc/tmp/
+.dvc/plots/
+
+# Datasets (managed via DVC, not git)
+data/raw/
+data/interim/
+data/processed/
+data/attack_templates/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local env files (never commit secrets)
+.env
+.env.local
+*.secret
