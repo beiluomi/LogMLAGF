@@ -21,13 +21,29 @@ window:
 # (count of same (subject, op, obj) triple in the window) and time
 # recency to the target event; the top-`max_nodes` are kept.
 subgraph:
-  max_nodes: 50
+  # 128 is the post-Checkpoint-4 default. Sweep space for Phase 7 GPU-budget
+  # tuning is [96, 128, 256]: bump to 256 if RTX 4090 VRAM has headroom in
+  # the joint pretraining; drop to 96 if Phase 7 OOM. PIDS literature
+  # (KAIROS / MAGIC) operates in the 100-500 node-per-subgraph regime; 128
+  # is a power-of-two pick that aligns cleanly with batched matmul.
+  max_nodes: 128
   khop: 2
   edge_ranking: joint  # one of: weight | time_recency | joint
 
-# Granularity sweep used by build_window_density_histograms.py to populate
-# the Checkpoint 4 decision table; the project owner reads this table to
-# pick the final time_window_hours.
+# Per-event sampling within each (host, time_window) bucket
+# (decision 9 -- training/eval unit is per-event subgraph, not per-window).
+sample:
+  # Cap on the number of target events drawn from each (host, window)
+  # bucket. Benign windows are uniformly down-sampled to this cap; malicious
+  # windows keep ALL attack events and down-sample only the benign portion
+  # to this cap. NumPy global seed (utils/seed.py) governs the choice for
+  # reproducibility.
+  max_events_per_window: 1000
+
+# Granularity sweep used by build_window_density_histograms.py for the
+# Checkpoint 4 decision table. After project-owner review the final
+# decision-6 granularity is window.time_window_hours = 1.0; this sweep
+# stays around for re-checks if the dataset changes.
 granularity_sweep_hours:
   - 0.5
   - 1.0

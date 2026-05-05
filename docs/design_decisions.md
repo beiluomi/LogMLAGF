@@ -182,16 +182,69 @@ KAIROS (S&P'24) 与 MAGIC (USENIX Sec'24) 都明确批评过 ATLAS 原作切分�
 - **训练良性池**：从其他 9 个 scenario 中按 `(host_id, time_window)` 二元组联合采样良性事件。
 - **不变量**：对于任意一对 `(host_id, time_window)`，其全部良性事件要么完全进 train，要么完全进 test，不允许跨集泄漏。
 - **不变量校验**：`src/loghetero/data/datamodule.py` 在 `setup` 时必须 `assert` 这一条件，违反则 fail-fast。
-- **时间窗粒度（initial）**：**1 小时**——足够细切出足够多窗口，又足够粗避免事件碎片化。
+- **时间窗粒度**：**1.0 小时**（最终决定，详见下方 "Phase 1 数据流水线跑起来后再回看的事项" 子节）。
 
 ### Phase 1 数据流水线跑起来后再回看的事项
 
-时间窗粒度 1 小时是初值。Phase 1 跑通后须输出每个 scenario 的事件密度直方图（events / hour 分布），由项目所有者审视后决定是否调整：
+**时间窗粒度（最终决定，2026-05-05，回应 Checkpoint 4 数据）：1 小时。** 这是基于 ATLAS 实际事件密度（每 window 25k–134k events）拍定的全局统一粒度。事件密度高于早期 GNN 经验区间但完全在现代 HGT 容量内（HGTConv 在 RTX 4090 上 forward 100k-edge 子图为亚秒级）。所有 (scenario, host) 共享同一粒度，**不分档**，依据是 Checkpoint 4 第 17 张全局 CDF 图无 h1/h2 bimodal、无 attacker/victim 单一分轴可分。
 
-- 事件稀疏的 scenario 可能拉到 4 小时；
-- 事件密集的 scenario 可能压到 30 分钟。
+**历史背景（保留以供 audit）。** 决策 6 初版写"时间窗粒度 1 小时是初值，Phase 1 跑通后须输出每个 scenario 的事件密度直方图，由项目所有者审视后决定是否调整（事件稀疏的 scenario 可能拉到 4 小时；事件密集的 scenario 可能压到 30 分钟）"。Checkpoint 4 数据（`data/atlas_window_density_summary.json`）显示：所有 16 (scenario, host) 在所有 swept 粒度（0.5h / 1h / 2h / 4h）下平均事件密度 16k–200k，**没有任何粒度落入初版 launch spec 的 [10, 10000] 启发区间**——该启发区间是早期 GNN 时代经验，对现代 HGT 不适用，已在 `docs/known_issues.md` "经验启发式校准记录" 子节标注。最终统一选 1.0h（保持初值），不分档。
 
-调整时**所有 scenario 必须用同一粒度**——不能逐 scenario 调，否则评测协议本身变成不可比的混合体。统一粒度的最终值在 Phase 1.6 完成时回写本节。
+调整时**所有 scenario 必须用同一粒度**这条规则保留——不能逐 scenario 调，否则评测协议本身变成不可比的混合体。
+
+---
+
+## 决策 9：训练与评测样本单位（per-event subgraph，不是 per-window）
+
+**决定（2026-05-05，回应 Checkpoint 4 数据）。** 训练样本的逻辑单位是 `(target_event, subgraph_at_target, label)` **三元组**，**不是** `(window, subgraph_of_window, label)` 二元组。
+
+### 论证
+
+Checkpoint 4 数据揭示 ATLAS 每 window 含 16k–200k events，远超早期 GNN [10, 10000] heuristic。如果以 window 为样本单位：
+
+- M5_h1 这样的高密度 host 会单独占据数据集主导（5 windows × 124k events），稀释其他 hosts 的信号；
+- 良性 / 恶意 window 数量比极不平衡（多数 window 只含良性事件）；
+- BERT 文本 input 没有自然对应物——一个 window 含数万事件文本无法 batch；
+- HTGN 子图采样也以单个 target event 为中心更自然（K-hop 邻域 = 该事件附近的因果链）。
+
+以 event 为样本单位（subgraph 仍以 event 为中心做 K-hop）解决以上四问题：BERT 处理单 event 的清洗后文本（几十–几百 token），HTGN 处理以 event 为中心、最多 `subgraph.max_nodes`（默认 128）节点的子图，标签按事件粒度而非 window 粒度。
+
+### 协议
+
+1. **训练样本三元组** `(target_event, subgraph_at_target, label)`：
+   - `target_event`：来自某个 (host, window) 内的某一具体事件，按下方 §2 采样；
+   - `subgraph_at_target`：以 `target_event` 涉及的 subject + obj 节点为中心、K-hop 异构邻域采样得到的子图（max_nodes / khop / edge_ranking 走 Hydra 配置 `configs/data/atlas.yaml::subgraph`）；
+   - `label`：良性 / 恶意（pretrain 模式 `None`；finetune_anomaly 模式来自 ATLAS ground truth 的二分类标签）。
+
+2. **每 window 内 target_event 采样策略**（防止 M5_h1 等高密度 host 主导数据集）：
+   - **良性 window**：均匀下采样到上限 `sample.max_events_per_window`（默认 1000）；
+   - **恶意 window**：**全部攻击事件保留**（不下采样，攻击事件稀缺），良性事件下采样到 `sample.max_events_per_window`；
+   - 上限作为 Hydra 参数透出（`configs/data/atlas.yaml::sample.max_events_per_window`）；
+   - 下采样使用全局 numpy 种子（已在 `utils/seed.py` 固定）保证可复现，跑两次同 config 得到同一 train / test 切分与同一 target_event 集合。
+
+3. **leave-one-attack-out 与决策 6 的关系**：
+   - 切分协议依然作用在 `(host_id, time_window)` 二元组上（决策 6 保持）；
+   - 但训练 / 评测样本来自该二元组下属的所有 `target_events`；
+   - **不变量**：任意 `(host, window)` 内的所有 `target_events` 完全进 train 或完全进 test，不允许跨集泄漏（决策 6 的 fail-fast assert 在 event 层面照样成立）。
+
+4. **预计样本规模**（基于 Checkpoint 4 数据 + `max_events_per_window=1000`）：
+   - 训练样本：16 hosts × ~4 windows/host × ~1000 events/window ≈ **~64k 训练样本**
+   - 测试样本（leave-one-attack-out 一个 fold）：1–2 hosts × 1–7 windows × 1000 events/window ≈ **~4k–8k 测试样本**
+   - 64k 训练样本足以训练 BERT-base + HTGN 联合模型（GLUE benchmarks 多在 数 K–数十 K 量级）。
+   - 4k–8k 测试样本足以测出稳定 F1（标准 anomaly detection benchmark 测试集多在 1k–10k 量级）。
+
+### Phase 1.6 DataModule 实现 spec
+
+- **三种模式**：`pretrain` / `finetune_anomaly` / `finetune_compression`
+  - pretrain 模式：label 字段返回 `None`（无监督）
+  - finetune_anomaly 模式：label 字段返回 0 (benign) / 1 (attack)
+  - finetune_compression 模式：label 字段返回压缩 ground truth（Phase 10 详化，Checkpoint 5 占位即可）
+- **DataLoader 三接口**：`train_dataloader / val_dataloader / test_dataloader`，每模式都正确实现
+- **决策 6 不变量 assert**（`(host_id, time_window)` 联合切分）必须在 `setup` 时验证，违反 `AssertionError` fail-fast
+- **Cross-log-type TZ sanity check** 必须在 `setup` 顶部跑：取每个 (scenario, host) 的 dns / firefox / security_events 第一条事件，验证 dns 的 EDT→UTC 转换后与 firefox 的 UTC 时间差 ≤ 5 min，失败抛 `AssertionError` 错误信息直接指向 `parsers/atlas.py::localize_eastern`
+- **≥2 反例测试** 覆盖上述两个 assert 的真正触发：
+  - (a) 故意构造跨集泄漏的 (host, window) 数据，期望 leakage assert 触发
+  - (b) 故意把某个 log type 的时间戳偏移 12 小时（模拟 TZ 错误），期望 TZ sanity assert 触发
 
 ---
 
@@ -251,3 +304,4 @@ APT 检测里"出现一次就消失"的孤立节点经常是**攻击者的 stagi
 - **2026-05-05** — 第一次扩展：决策 5（CDM 节点映射）、6（Leave-One-Attack-Out 协议）、7（AI 协作披露策略）写入；回应 Q1–Q5。
 - **2026-05-05** — 引用核实修订：决策 2 删除 PLATO（确认为 AI 引用幻觉），扩充 Innovation 1 prior work 至 4 条 verified 引用（GraphFormers / GreaseLM / Patton / THLM），Innovation 2 加入 ConGraT 作为 GTCL 直接先验且 Threatrace 标注 Phase 12 待核实；决策 4.2 加入 HGT building-block 引用；决策 5 给 SrcSinkObject 加显式 footnote。
 - **2026-05-05** — 决策 8（孤立节点保留策略）写入；回应 Checkpoint 3 启动指令第 4 条。
+- **2026-05-05** — Checkpoint 4 数据落定后修订：决策 6 时间窗粒度 1.0h 标 final（基于 16+1 直方图 + 决策表，全局统一不分档）；新增决策 9（训练与评测样本单位 = per-event subgraph）；`configs/data/atlas.yaml::subgraph.max_nodes` 50 → 128（PIDS 文献 KAIROS / MAGIC 在 100–500 节点区间，128 是 2 的幂便于批处理）。

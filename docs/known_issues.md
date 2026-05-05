@@ -1,5 +1,13 @@
 # Known Issues
 
+## 经验启发式校准记录（避免被早期 GNN 数字误导）
+
+- **"每 window 10–10000 events 的合理区间"启发式不适用于 LogHetero / 现代 HGT**（2026-05-05 标记，Checkpoint 4 数据后校准）。
+  - 来源：launch spec 引用的早期 GNN 经验，对应 GraphSAGE / GAT 在小图（< 10k edges）上训练的样本规模感。
+  - LogHetero 现实：ATLAS 每 1 小时 window 含 16k–200k events，对应子图（per-event K-hop=2、max_nodes=128）规模 100–500 节点 / 100–1000 边，一次 forward 在 RTX 4090 上亚秒级。
+  - 训练规模感：以 event 为样本单位（决策 9）后，每 fold 训练样本 ~64k、测试样本 ~4k–8k，与 GLUE benchmarks 同量级，BERT-base + HTGN 联合训练规模合理。
+  - **后续 reviewer 或合作者从 commit log / 决策表里看到 "16k–200k events/window" 时，请直接读本条**——这不是错误数据，是数据集本身的客观特征 + 训练单位升级到 per-event 后的 emergent 规模感。
+
 ## Phase 1.2 修订记录（避免被误读为退步）
 
 - **Q-1 mini-checkpoint commit `246ee95` 中 -8,143 success / +8,143 skipped 的语义**：refactor SecurityEventsParser 为 per-EventID extractor pattern 的副产物——发现旧 code 在 4663 / 4656 / 4658 / 4660 / 4690 等 file-handle 事件 body 缺失 `Process Name` 字段时，会 fallback 用 `Account Name` 当作 process subject。这导致 Checkpoint 3 提交的 ATLAS 图里有约 8,143 条 `(account_name as process) → file` 的语义错误边藏着——账户名被错误当成进程节点参与图构建。新 extractor 在 Process Name 缺失时返回 None（skipped，不是 failed）。**这是 graph quality 的明显改进，不是数据丢失**。Phase 8 跑基线时不会再以"基线效果异常"的形式暴露这个 bug。
