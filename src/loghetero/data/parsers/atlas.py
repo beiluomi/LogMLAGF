@@ -27,7 +27,8 @@ from __future__ import annotations
 
 import csv
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
@@ -41,6 +42,10 @@ from .base import (
     localize_eastern,
     to_utc_ns,
 )
+
+# Forward type alias used by the dispatch table below; the actual definition
+# of _Extraction lives further down.
+ExtractorFn = Callable[[dict[str, str]], "_Extraction | None"]
 
 # ---------------------------------------------------------------------------
 # DNS parser
@@ -204,30 +209,30 @@ class FirefoxParser(Parser):
 # ---------------------------------------------------------------------------
 # Windows security_events parser
 # ---------------------------------------------------------------------------
+# 11-EventID dispatch (7 file/process events from Phase 1.2 Checkpoint 2 +
+# 4 user-logon events added in the Q-1 mini-checkpoint after Checkpoint 3).
+# Each EventID has its own extractor function so per-event filter logic
+# (e.g. 4624's LogonType filter) lives next to the field extraction.
 
-# Curated audit EventIDs we treat as security-relevant. Other EventIDs are
-# skipped (not failed). Mapping: eventid -> (operation, obj_node_type).
-_AUDIT_EVENTID_DISPATCH: dict[str, tuple[EdgeType, NodeType]] = {
-    "4656": (EdgeType.HANDLE_REQUEST, NodeType.file),
-    "4658": (EdgeType.HANDLE_CLOSE, NodeType.file),
-    "4660": (EdgeType.FILE_DELETE, NodeType.file),
-    "4663": (EdgeType.FILE_ACCESS, NodeType.file),
-    "4688": (EdgeType.PROCESS_CREATE, NodeType.process),
-    "4689": (EdgeType.PROCESS_EXIT, NodeType.process),
-    "4690": (EdgeType.HANDLE_DUPLICATE, NodeType.file),
-}
-
-_BODY_KV_RE = re.compile(r"^\s+([\w/\(\) ]+?):\s+(.+?)\s*$")
+# Optional leading whitespace: most fields are indented under a section header
+# ("\tAccount Name:\t\tfoo") but a few (e.g. "Logon Type:" in 4624) appear
+# at column 0. Section headers themselves (line ending in just ":") are
+# filtered out by the caller before they reach this regex.
+_BODY_KV_RE = re.compile(r"^\s*([\w/\(\) ]+?):\s+(.+?)\s*$")
 
 
 def _parse_event_body(body: str) -> dict[str, str]:
-    """Extract key:value pairs from a Windows audit event body.
+    """Extract key:value pairs from a Windows audit event body (last-wins).
 
     The body is roughly INI-style, with section headers like ``Subject:`` /
     ``Object:`` / ``Process Information:`` followed by indented ``Key: Value``
-    lines. We flatten everything into one dict keyed by the field name; later
-    fields with the same name win, which is fine because the EventID-specific
-    extractors only ever read fields they expect.
+    lines. We flatten everything into one dict keyed by the field name with
+    **last-wins** semantics: 4624 puts ``Account Name`` in both ``Subject``
+    (typically SYSTEM) and ``New Logon`` (the actual logon-target user). The
+    one we want is the *later* one, so last-wins is correct. For the 7
+    file/process EventIDs (4656/4658/4660/4663/4688/4689/4690) every relevant
+    field name is unique within the body, so first-wins vs last-wins is a
+    no-op there.
     """
     out: dict[str, str] = {}
     for raw_line in body.splitlines():
@@ -235,11 +240,210 @@ def _parse_event_body(body: str) -> dict[str, str]:
             continue
         m = _BODY_KV_RE.match(raw_line)
         if m:
-            key = m.group(1).strip()
-            val = m.group(2).strip()
-            if key not in out:
-                out[key] = val
+            out[m.group(1).strip()] = m.group(2).strip()
     return out
+
+
+def _user_id(fields: dict[str, str]) -> str | None:
+    """Compose ``DOMAIN\\Account`` from body fields, or just ``Account`` if no domain.
+
+    Returns ``None`` if Account Name is missing, signalling the extractor to
+    skip this event.
+    """
+    account = fields.get("Account Name")
+    if not account:
+        return None
+    domain = fields.get("Account Domain")
+    return f"{domain}\\{account}" if domain else account
+
+
+@dataclass(frozen=True, slots=True)
+class _Extraction:
+    """An extractor's verdict for one Windows audit event.
+
+    Returning ``None`` from an extractor signals "this event is by-design
+    skipped" (e.g. 4624 with the wrong LogonType): caller records ``skipped``,
+    not ``failed``.
+    """
+
+    subject: str
+    subject_type: NodeType
+    obj: str
+    obj_type: NodeType
+    operation: EdgeType
+    extra_attrs: dict[str, object]
+
+
+# --- File / handle / process extractors (the original 7) ----------------
+
+def _extract_file_op(
+    fields: dict[str, str], op: EdgeType
+) -> _Extraction | None:
+    proc = fields.get("Process Name")
+    obj_name = fields.get("Object Name") or fields.get("Handle ID")
+    if not proc or not obj_name:
+        return None
+    return _Extraction(
+        subject=proc,
+        subject_type=NodeType.process,
+        obj=obj_name,
+        obj_type=NodeType.file,
+        operation=op,
+        extra_attrs={
+            "access_mask": fields.get("Access Mask"),
+            "object_type": fields.get("Object Type"),
+        },
+    )
+
+
+def _extract_4656(f: dict[str, str]) -> _Extraction | None:
+    return _extract_file_op(f, EdgeType.HANDLE_REQUEST)
+
+
+def _extract_4658(f: dict[str, str]) -> _Extraction | None:
+    return _extract_file_op(f, EdgeType.HANDLE_CLOSE)
+
+
+def _extract_4660(f: dict[str, str]) -> _Extraction | None:
+    return _extract_file_op(f, EdgeType.FILE_DELETE)
+
+
+def _extract_4663(f: dict[str, str]) -> _Extraction | None:
+    return _extract_file_op(f, EdgeType.FILE_ACCESS)
+
+
+def _extract_4690(f: dict[str, str]) -> _Extraction | None:
+    return _extract_file_op(f, EdgeType.HANDLE_DUPLICATE)
+
+
+def _extract_4688(f: dict[str, str]) -> _Extraction | None:
+    creator = f.get("Creator Process Name")
+    new_proc = f.get("New Process Name") or f.get("Process Name")
+    if not creator or not new_proc:
+        # Fall back to subject account if no creator process named (rare).
+        creator = creator or f.get("Account Name")
+        if not creator or not new_proc:
+            return None
+    return _Extraction(
+        subject=creator,
+        subject_type=NodeType.process,
+        obj=new_proc,
+        obj_type=NodeType.process,
+        operation=EdgeType.PROCESS_CREATE,
+        extra_attrs={},
+    )
+
+
+def _extract_4689(f: dict[str, str]) -> _Extraction | None:
+    proc = f.get("Process Name")
+    if not proc:
+        return None
+    # Self-loop edge: keeps (process, PROCESS_EXIT, process) consistent with
+    # ALLOWED_EDGE_TRIPLES rather than inventing a sentinel sink node.
+    return _Extraction(
+        subject=proc,
+        subject_type=NodeType.process,
+        obj=proc,
+        obj_type=NodeType.process,
+        operation=EdgeType.PROCESS_EXIT,
+        extra_attrs={},
+    )
+
+
+# --- User-logon extractors (Q-1 mini-checkpoint, 4 new EventIDs) --------
+
+# 4624 LogonType filter: only Network (3), NewCredentials (9), and
+# RemoteInteractive / RDP (10). Type 5 (Service) and Type 2 (Interactive)
+# are excluded as they are baseline noise per the Q-1 spec.
+_ADMITTED_LOGON_TYPES: frozenset[str] = frozenset({"3", "9", "10"})
+
+
+def _extract_4624(f: dict[str, str]) -> _Extraction | None:
+    logon_type = f.get("Logon Type", "").strip()
+    if logon_type not in _ADMITTED_LOGON_TYPES:
+        return None  # skipped (filtered) -- not failed
+    user = _user_id(f)
+    if not user:
+        return None
+    proc = f.get("Process Name") or "lsass.exe"  # logon-target process; lsass is canonical fallback
+    return _Extraction(
+        subject=user,
+        subject_type=NodeType.user,
+        obj=proc,
+        obj_type=NodeType.process,
+        operation=EdgeType.USER_LOGON,
+        extra_attrs={"logon_type": logon_type},
+    )
+
+
+def _extract_4625(f: dict[str, str]) -> _Extraction | None:
+    user = _user_id(f)
+    if not user:
+        return None
+    proc = f.get("Caller Process Name") or f.get("Process Name") or "lsass.exe"
+    return _Extraction(
+        subject=user,
+        subject_type=NodeType.user,
+        obj=proc,
+        obj_type=NodeType.process,
+        operation=EdgeType.USER_LOGON_FAIL,
+        extra_attrs={
+            "failure_reason": f.get("Failure Reason"),
+            "status": f.get("Status"),
+            "sub_status": f.get("Sub Status"),
+            "logon_type": f.get("Logon Type"),
+        },
+    )
+
+
+def _extract_4672(f: dict[str, str]) -> _Extraction | None:
+    user = _user_id(f)
+    if not user:
+        return None
+    # 4672 has no Process Name field; LSASS is the canonical privilege grantor
+    # (the security subsystem that actually attaches the privileges to the token).
+    return _Extraction(
+        subject=user,
+        subject_type=NodeType.user,
+        obj="lsass.exe",
+        obj_type=NodeType.process,
+        operation=EdgeType.USER_PRIV_GRANT,
+        extra_attrs={"privileges": f.get("Privileges")},
+    )
+
+
+def _extract_4648(f: dict[str, str]) -> _Extraction | None:
+    user = _user_id(f)
+    if not user:
+        return None
+    proc = f.get("Process Name") or "runas.exe"
+    return _Extraction(
+        subject=user,
+        subject_type=NodeType.user,
+        obj=proc,
+        obj_type=NodeType.process,
+        operation=EdgeType.USER_EXPLICIT_LOGON,
+        extra_attrs={"target_server": f.get("Target Server Name")},
+    )
+
+
+# --- Dispatch table ------------------------------------------------------
+
+_AUDIT_EVENTID_EXTRACTORS: dict[str, "ExtractorFn"] = {
+    # File / handle / process (Phase 1.2 / Checkpoint 2)
+    "4656": _extract_4656,
+    "4658": _extract_4658,
+    "4660": _extract_4660,
+    "4663": _extract_4663,
+    "4688": _extract_4688,
+    "4689": _extract_4689,
+    "4690": _extract_4690,
+    # User-logon (Q-1 mini-checkpoint after Checkpoint 3)
+    "4624": _extract_4624,
+    "4625": _extract_4625,
+    "4672": _extract_4672,
+    "4648": _extract_4648,
+}
 
 
 class SecurityEventsParser(Parser):
@@ -278,7 +482,8 @@ class SecurityEventsParser(Parser):
                 keywords, dt_str, source, eventid, task = row[:5]
                 body = row[5] if len(row) >= 6 else ""
 
-                if eventid not in _AUDIT_EVENTID_DISPATCH:
+                extractor = _AUDIT_EVENTID_EXTRACTORS.get(eventid)
+                if extractor is None:
                     stats.record_skipped()
                     continue
 
@@ -291,48 +496,21 @@ class SecurityEventsParser(Parser):
                     continue
 
                 fields = _parse_event_body(body)
-                operation, obj_type = _AUDIT_EVENTID_DISPATCH[eventid]
-
-                # Subject: the process performing the action (Process Name); if
-                # absent (rare), fall back to the account name.
-                proc_name = fields.get("Process Name") or fields.get("New Process Name")
-                account = fields.get("Account Name", "")
-
-                if eventid in {"4688"}:
-                    # Process creation: subject = creator process; obj = new process
-                    subject = fields.get("Creator Process Name") or proc_name or account
-                    subject_type = NodeType.process
-                    obj_val = fields.get("New Process Name") or fields.get("Process Name") or "?"
-                elif eventid in {"4689"}:
-                    # Process-exit: emit a self-loop edge (process -> process via
-                    # PROCESS_EXIT). Setting obj == subject keeps the triple
-                    # (process, process_exit, process) consistent with
-                    # ALLOWED_EDGE_TRIPLES instead of inventing a sentinel node.
-                    subject = proc_name or account
-                    subject_type = NodeType.process
-                    obj_val = subject
-                else:
-                    # File-handle / access events
-                    subject = proc_name or account
-                    subject_type = NodeType.process
-                    obj_val = fields.get("Object Name") or fields.get("Handle ID") or "?"
-
-                if not subject:
-                    stats.record_failure(
-                        row_num,
-                        dt_str,
-                        f"could not derive subject for EventID {eventid}",
-                    )
+                extraction = extractor(fields)
+                if extraction is None:
+                    # By-design skip (e.g. 4624 with LogonType ∉ {3, 9, 10}, or
+                    # missing required field). Not a failure.
+                    stats.record_skipped()
                     continue
 
                 stats.record_success()
                 yield Event(
                     timestamp_ns=ts_ns,
-                    subject=subject,
-                    subject_type=subject_type,
-                    obj=obj_val,
-                    obj_type=obj_type,
-                    operation=operation,
+                    subject=extraction.subject,
+                    subject_type=extraction.subject_type,
+                    obj=extraction.obj,
+                    obj_type=extraction.obj_type,
+                    operation=extraction.operation,
                     log_type=self.LOG_TYPE,
                     scenario_id=scenario_id,
                     host_id=host_id,
@@ -341,9 +519,8 @@ class SecurityEventsParser(Parser):
                         "keywords": keywords,
                         "source": source,
                         "task_category": task,
-                        "account_name": account,
+                        "account_name": fields.get("Account Name"),
                         "logon_id": fields.get("Logon ID"),
-                        "access_mask": fields.get("Access Mask"),
-                        "object_type": fields.get("Object Type"),
+                        **extraction.extra_attrs,
                     },
                 )

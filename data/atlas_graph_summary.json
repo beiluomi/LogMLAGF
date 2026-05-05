@@ -1,16 +1,16 @@
 {
-  "generated_at_utc": "2026-05-05T11:29:03+00:00",
+  "generated_at_utc": "2026-05-05T12:49:58+00:00",
   "n_units": 16,
   "per_unit": [
     {
       "scenario": "M1",
       "host": "M1_h1",
       "nodes_per_type": {
-        "process": 56,
-        "file": 7214,
+        "process": 57,
+        "file": 7213,
         "socket": 0,
         "network": 2117,
-        "user": 0
+        "user": 3
       },
       "isolated_per_type": {
         "process": 0,
@@ -20,44 +20,44 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2175.66,
-        "file": 16.05,
+        "process": 2130.79,
+        "file": 16.0,
         "socket": 0.0,
         "network": 5.98,
-        "user": 0.0
+        "user": 2.67
       },
       "max_degree_per_type": {
-        "process": 27885,
+        "process": 27876,
         "file": 2524,
         "socket": 0,
         "network": 3546,
-        "user": 0
+        "user": 6
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1773,
         "network/net_dns_response/network": 1773,
         "process/net_http_request/network": 5562,
-        "process/handle_request/file": 39433,
-        "process/handle_close/file": 37244,
-        "process/file_access/file": 37285,
-        "process/handle_duplicate/file": 379,
+        "process/handle_request/file": 39432,
+        "process/handle_close/file": 37239,
+        "process/file_access/file": 37280,
         "process/process_create/process": 122,
         "process/file_delete/file": 1440,
-        "process/process_exit/process": 125
+        "process/process_exit/process": 125,
+        "user/user_priv_grant/process": 8
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 15.28
+      "elapsed_s": 15.05
     },
     {
       "scenario": "M1",
       "host": "M1_h2",
       "nodes_per_type": {
-        "process": 59,
-        "file": 5890,
+        "process": 61,
+        "file": 5888,
         "socket": 0,
         "network": 43,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -67,44 +67,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2254.51,
-        "file": 22.46,
+        "process": 2170.72,
+        "file": 22.36,
         "socket": 0.0,
         "network": 174.7,
-        "user": 0.0
+        "user": 3.2
       },
       "max_degree_per_type": {
-        "process": 26220,
+        "process": 26209,
         "file": 6268,
         "socket": 0,
         "network": 3688,
-        "user": 0
+        "user": 11
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1844,
         "network/net_dns_response/network": 1844,
         "process/net_http_request/network": 136,
-        "process/handle_close/file": 43275,
-        "process/file_access/file": 42826,
-        "process/handle_request/file": 45114,
-        "process/file_delete/file": 453,
-        "process/handle_duplicate/file": 604,
+        "process/handle_close/file": 43270,
+        "process/file_access/file": 42820,
+        "process/handle_request/file": 45112,
+        "process/file_delete/file": 452,
         "process/process_create/process": 163,
-        "process/process_exit/process": 141
+        "process/process_exit/process": 141,
+        "user/user_priv_grant/process": 14,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 12.9
+      "elapsed_s": 13.23
     },
     {
       "scenario": "M2",
       "host": "M2_h1",
       "nodes_per_type": {
-        "process": 54,
-        "file": 10586,
+        "process": 55,
+        "file": 10585,
         "socket": 0,
         "network": 1912,
-        "user": 0
+        "user": 3
       },
       "isolated_per_type": {
         "process": 0,
@@ -114,44 +116,44 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2682.13,
-        "file": 13.19,
+        "process": 2626.67,
+        "file": 13.15,
         "socket": 0.0,
         "network": 6.49,
-        "user": 0.0
+        "user": 2.33
       },
       "max_degree_per_type": {
-        "process": 31653,
+        "process": 31645,
         "file": 2564,
         "socket": 0,
         "network": 3800,
-        "user": 0
+        "user": 5
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1905,
         "network/net_dns_response/network": 1895,
         "process/net_http_request/network": 4803,
-        "process/file_access/file": 43950,
-        "process/handle_request/file": 48362,
-        "process/handle_close/file": 45687,
-        "process/handle_duplicate/file": 362,
+        "process/file_access/file": 43944,
+        "process/handle_request/file": 48361,
+        "process/handle_close/file": 45681,
         "process/process_create/process": 110,
         "process/file_delete/file": 1227,
-        "process/process_exit/process": 112
+        "process/process_exit/process": 112,
+        "user/user_priv_grant/process": 7
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 16.11
+      "elapsed_s": 16.23
     },
     {
       "scenario": "M2",
       "host": "M2_h2",
       "nodes_per_type": {
-        "process": 54,
-        "file": 9054,
+        "process": 56,
+        "file": 9052,
         "socket": 0,
         "network": 43,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -161,44 +163,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2577.19,
-        "file": 15.3,
+        "process": 2476.34,
+        "file": 15.24,
         "socket": 0.0,
         "network": 193.65,
-        "user": 0.0
+        "user": 3.0
       },
       "max_degree_per_type": {
-        "process": 26894,
+        "process": 26884,
         "file": 6792,
         "socket": 0,
         "network": 4080,
-        "user": 0
+        "user": 10
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 2045,
         "network/net_dns_response/network": 2035,
         "process/net_http_request/network": 167,
-        "process/handle_close/file": 45008,
-        "process/file_access/file": 45025,
-        "process/handle_request/file": 47502,
-        "process/file_delete/file": 464,
+        "process/handle_close/file": 45004,
+        "process/file_access/file": 45020,
+        "process/handle_request/file": 47500,
+        "process/file_delete/file": 463,
         "process/process_exit/process": 116,
-        "process/handle_duplicate/file": 496,
-        "process/process_create/process": 137
+        "process/process_create/process": 137,
+        "user/user_priv_grant/process": 13,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 13.19
+      "elapsed_s": 13.31
     },
     {
       "scenario": "M3",
       "host": "M3_h1",
       "nodes_per_type": {
-        "process": 57,
-        "file": 10568,
+        "process": 59,
+        "file": 10566,
         "socket": 0,
         "network": 790,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -208,44 +212,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2531.65,
-        "file": 13.42,
+        "process": 2438.2,
+        "file": 13.38,
         "socket": 0.0,
         "network": 5.37,
-        "user": 0.0
+        "user": 3.0
       },
       "max_degree_per_type": {
-        "process": 42602,
+        "process": 42592,
         "file": 3091,
         "socket": 0,
         "network": 1126,
-        "user": 0
+        "user": 10
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 563,
         "network/net_dns_response/network": 563,
         "process/net_http_request/network": 1990,
-        "process/handle_close/file": 46724,
-        "process/file_access/file": 45161,
-        "process/handle_request/file": 48756,
-        "process/handle_duplicate/file": 448,
+        "process/handle_close/file": 46717,
+        "process/file_access/file": 45154,
+        "process/handle_request/file": 48754,
         "process/process_create/process": 139,
-        "process/file_delete/file": 725,
-        "process/process_exit/process": 111
+        "process/file_delete/file": 724,
+        "process/process_exit/process": 111,
+        "user/user_priv_grant/process": 13,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 14.23
+      "elapsed_s": 14.42
     },
     {
       "scenario": "M3",
       "host": "M3_h2",
       "nodes_per_type": {
-        "process": 58,
-        "file": 12268,
+        "process": 60,
+        "file": 12266,
         "socket": 0,
         "network": 46,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -255,44 +261,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 3438.66,
-        "file": 16.2,
+        "process": 3314.6,
+        "file": 16.15,
         "socket": 0.0,
         "network": 81.5,
-        "user": 0.0
+        "user": 3.2
       },
       "max_degree_per_type": {
-        "process": 83901,
+        "process": 83890,
         "file": 7038,
         "socket": 0,
         "network": 1800,
-        "user": 0
+        "user": 11
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 900,
         "network/net_dns_response/network": 900,
         "process/net_http_request/network": 149,
-        "process/handle_close/file": 65853,
-        "process/file_access/file": 64159,
-        "process/handle_request/file": 67641,
-        "process/file_delete/file": 480,
+        "process/handle_close/file": 65847,
+        "process/file_access/file": 64152,
+        "process/handle_request/file": 67639,
+        "process/file_delete/file": 479,
         "process/process_exit/process": 138,
-        "process/handle_duplicate/file": 566,
-        "process/process_create/process": 159
+        "process/process_create/process": 159,
+        "user/user_priv_grant/process": 14,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 16.22
+      "elapsed_s": 16.85
     },
     {
       "scenario": "M4",
       "host": "M4_h1",
       "nodes_per_type": {
-        "process": 61,
-        "file": 7751,
+        "process": 63,
+        "file": 7749,
         "socket": 0,
         "network": 1399,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -302,44 +310,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2415.0,
-        "file": 18.43,
+        "process": 2330.25,
+        "file": 18.36,
         "socket": 0.0,
         "network": 5.94,
-        "user": 0.0
+        "user": 3.4
       },
       "max_degree_per_type": {
-        "process": 33715,
+        "process": 33703,
         "file": 2744,
         "socket": 0,
         "network": 2186,
-        "user": 0
+        "user": 12
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1093,
         "network/net_dns_response/network": 1093,
         "process/net_http_request/network": 3945,
-        "process/handle_request/file": 48675,
-        "process/handle_close/file": 46135,
-        "process/file_access/file": 46024,
+        "process/handle_request/file": 48673,
+        "process/handle_close/file": 46131,
+        "process/file_access/file": 46020,
         "process/file_delete/file": 1476,
         "process/process_exit/process": 122,
-        "process/handle_duplicate/file": 516,
-        "process/process_create/process": 150
+        "process/process_create/process": 150,
+        "user/user_priv_grant/process": 15,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 15.42
+      "elapsed_s": 15.98
     },
     {
       "scenario": "M4",
       "host": "M4_h2",
       "nodes_per_type": {
-        "process": 55,
-        "file": 5557,
+        "process": 57,
+        "file": 5555,
         "socket": 0,
         "network": 46,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -349,44 +359,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2167.93,
-        "file": 21.34,
+        "process": 2083.12,
+        "file": 21.26,
         "socket": 0.0,
         "network": 69.35,
-        "user": 0.0
+        "user": 3.2
       },
       "max_degree_per_type": {
-        "process": 22161,
+        "process": 22150,
         "file": 6116,
         "socket": 0,
         "network": 1526,
-        "user": 0
+        "user": 11
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 763,
         "network/net_dns_response/network": 763,
         "process/net_http_request/network": 138,
-        "process/file_access/file": 38395,
-        "process/handle_request/file": 40462,
-        "process/handle_close/file": 38874,
-        "process/file_delete/file": 355,
+        "process/file_access/file": 38390,
+        "process/handle_request/file": 40460,
+        "process/handle_close/file": 38870,
+        "process/file_delete/file": 354,
         "process/process_exit/process": 117,
-        "process/handle_duplicate/file": 502,
-        "process/process_create/process": 138
+        "process/process_create/process": 138,
+        "user/user_priv_grant/process": 14,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 12.35
+      "elapsed_s": 12.63
     },
     {
       "scenario": "M5",
       "host": "M5_h1",
       "nodes_per_type": {
-        "process": 51,
-        "file": 22270,
+        "process": 52,
+        "file": 22268,
         "socket": 0,
         "network": 1489,
-        "user": 0
+        "user": 1
       },
       "isolated_per_type": {
         "process": 0,
@@ -396,44 +408,44 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 12061.92,
-        "file": 27.43,
+        "process": 11818.23,
+        "file": 27.41,
         "socket": 0.0,
         "network": 7.07,
-        "user": 0.0
+        "user": 4.0
       },
       "max_degree_per_type": {
-        "process": 302772,
+        "process": 302770,
         "file": 26913,
         "socket": 0,
         "network": 3454,
-        "user": 0
+        "user": 4
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1727,
         "network/net_dns_response/network": 1727,
         "process/net_http_request/network": 3621,
         "process/handle_request/file": 222575,
-        "process/file_access/file": 165164,
-        "process/handle_close/file": 221621,
-        "process/file_delete/file": 987,
+        "process/file_access/file": 165158,
+        "process/handle_close/file": 221614,
+        "process/file_delete/file": 986,
         "process/process_exit/process": 146,
-        "process/handle_duplicate/file": 600,
-        "process/process_create/process": 149
+        "process/process_create/process": 149,
+        "user/user_priv_grant/process": 4
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 40.3
+      "elapsed_s": 40.94
     },
     {
       "scenario": "M5",
       "host": "M5_h2",
       "nodes_per_type": {
-        "process": 48,
-        "file": 8948,
+        "process": 50,
+        "file": 8945,
         "socket": 0,
         "network": 127,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -443,44 +455,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2678.0,
-        "file": 14.28,
+        "process": 2561.96,
+        "file": 14.23,
         "socket": 0.0,
         "network": 55.83,
-        "user": 0.0
+        "user": 3.0
       },
       "max_degree_per_type": {
-        "process": 21872,
+        "process": 21870,
         "file": 9464,
         "socket": 0,
         "network": 3394,
-        "user": 0
+        "user": 10
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1697,
         "network/net_dns_response/network": 1697,
         "process/net_http_request/network": 302,
-        "process/handle_close/file": 41752,
-        "process/file_access/file": 41978,
-        "process/handle_request/file": 43005,
-        "process/file_delete/file": 570,
-        "process/handle_duplicate/file": 451,
+        "process/handle_close/file": 41749,
+        "process/file_access/file": 41974,
+        "process/handle_request/file": 43003,
+        "process/file_delete/file": 569,
         "process/process_exit/process": 114,
-        "process/process_create/process": 129
+        "process/process_create/process": 129,
+        "user/user_priv_grant/process": 13,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 8.21
+      "elapsed_s": 8.62
     },
     {
       "scenario": "M6",
       "host": "M6_h1",
       "nodes_per_type": {
-        "process": 63,
-        "file": 8000,
+        "process": 65,
+        "file": 7998,
         "socket": 0,
         "network": 1425,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -490,44 +504,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2563.02,
-        "file": 19.6,
+        "process": 2475.65,
+        "file": 19.54,
         "socket": 0.0,
         "network": 6.39,
-        "user": 0.0
+        "user": 3.2
       },
       "max_degree_per_type": {
-        "process": 34233,
+        "process": 34222,
         "file": 3444,
         "socket": 0,
         "network": 2530,
-        "user": 0
+        "user": 11
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1265,
         "network/net_dns_response/network": 1265,
         "process/net_http_request/network": 4039,
-        "process/handle_close/file": 50630,
-        "process/file_access/file": 50966,
-        "process/handle_request/file": 53159,
+        "process/handle_close/file": 50625,
+        "process/file_access/file": 50961,
+        "process/handle_request/file": 53157,
         "process/file_delete/file": 1517,
         "process/process_exit/process": 137,
-        "process/handle_duplicate/file": 557,
-        "process/process_create/process": 164
+        "process/process_create/process": 164,
+        "user/user_priv_grant/process": 14,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 12.48
+      "elapsed_s": 12.57
     },
     {
       "scenario": "M6",
       "host": "M6_h2",
       "nodes_per_type": {
-        "process": 65,
-        "file": 8915,
+        "process": 67,
+        "file": 8913,
         "socket": 0,
         "network": 71,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -537,44 +553,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 3095.63,
-        "file": 22.47,
+        "process": 2994.13,
+        "file": 22.4,
         "socket": 0.0,
         "network": 98.44,
-        "user": 0.0
+        "user": 3.8
       },
       "max_degree_per_type": {
-        "process": 85373,
+        "process": 85360,
         "file": 8798,
         "socket": 0,
         "network": 3392,
-        "user": 0
+        "user": 14
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1696,
         "network/net_dns_response/network": 1696,
         "process/net_http_request/network": 205,
-        "process/file_access/file": 64309,
-        "process/handle_request/file": 68278,
-        "process/handle_close/file": 66558,
-        "process/file_delete/file": 554,
+        "process/file_access/file": 64301,
+        "process/handle_request/file": 68276,
+        "process/handle_close/file": 66551,
+        "process/file_delete/file": 553,
         "process/process_exit/process": 165,
-        "process/handle_duplicate/file": 610,
-        "process/process_create/process": 186
+        "process/process_create/process": 186,
+        "user/user_priv_grant/process": 17,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 12.71
+      "elapsed_s": 12.74
     },
     {
       "scenario": "S1",
       "host": "S1",
       "nodes_per_type": {
-        "process": 50,
-        "file": 6189,
+        "process": 51,
+        "file": 6188,
         "socket": 0,
         "network": 1059,
-        "user": 0
+        "user": 3
       },
       "isolated_per_type": {
         "process": 0,
@@ -584,44 +602,44 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 1953.34,
-        "file": 15.28,
+        "process": 1909.22,
+        "file": 15.24,
         "socket": 0.0,
         "network": 5.11,
-        "user": 0.0
+        "user": 2.67
       },
       "max_degree_per_type": {
-        "process": 21120,
+        "process": 21111,
         "file": 1948,
         "socket": 0,
         "network": 1368,
-        "user": 0
+        "user": 6
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 684,
         "network/net_dns_response/network": 684,
         "process/net_http_request/network": 2678,
-        "process/file_access/file": 29404,
-        "process/handle_request/file": 32600,
-        "process/handle_close/file": 31319,
+        "process/file_access/file": 29401,
+        "process/handle_request/file": 32599,
+        "process/handle_close/file": 31317,
         "process/file_delete/file": 965,
-        "process/handle_duplicate/file": 299,
         "process/process_create/process": 98,
-        "process/process_exit/process": 103
+        "process/process_exit/process": 103,
+        "user/user_priv_grant/process": 8
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 7.69
+      "elapsed_s": 7.63
     },
     {
       "scenario": "S2",
       "host": "S2",
       "nodes_per_type": {
-        "process": 64,
-        "file": 25065,
+        "process": 67,
+        "file": 25064,
         "socket": 0,
         "network": 2098,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -631,18 +649,18 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2767.39,
-        "file": 6.81,
+        "process": 2630.48,
+        "file": 6.78,
         "socket": 0.0,
         "network": 5.17,
-        "user": 0.0
+        "user": 4.4
       },
       "max_degree_per_type": {
-        "process": 63427,
+        "process": 63363,
         "file": 5301,
         "socket": 0,
         "network": 2844,
-        "user": 0
+        "user": 17
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1422,
@@ -651,24 +669,26 @@
         "process/handle_close/file": 52323,
         "process/file_access/file": 58183,
         "process/handle_request/file": 57736,
-        "process/handle_duplicate/file": 893,
         "process/process_create/process": 318,
         "process/file_delete/file": 1600,
-        "process/process_exit/process": 292
+        "process/process_exit/process": 292,
+        "user/user_priv_grant/process": 20,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 17.12
+      "elapsed_s": 16.89
     },
     {
       "scenario": "S3",
       "host": "S3",
       "nodes_per_type": {
-        "process": 55,
-        "file": 7235,
+        "process": 57,
+        "file": 7233,
         "socket": 0,
         "network": 1430,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -678,44 +698,46 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2403.95,
-        "file": 17.64,
+        "process": 2311.14,
+        "file": 17.58,
         "socket": 0.0,
         "network": 5.98,
-        "user": 0.0
+        "user": 3.2
       },
       "max_degree_per_type": {
-        "process": 26450,
+        "process": 26439,
         "file": 2604,
         "socket": 0,
         "network": 2236,
-        "user": 0
+        "user": 11
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 1118,
         "network/net_dns_response/network": 1118,
         "process/net_http_request/network": 4076,
         "process/handle_close/file": 41044,
-        "process/file_access/file": 41934,
-        "process/handle_request/file": 42822,
+        "process/file_access/file": 41933,
+        "process/handle_request/file": 42820,
         "process/file_delete/file": 1360,
-        "process/handle_duplicate/file": 495,
         "process/process_create/process": 134,
-        "process/process_exit/process": 109
+        "process/process_exit/process": 109,
+        "user/user_priv_grant/process": 14,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 10.44
+      "elapsed_s": 10.71
     },
     {
       "scenario": "S4",
       "host": "S4",
       "nodes_per_type": {
-        "process": 49,
-        "file": 10935,
+        "process": 51,
+        "file": 10933,
         "socket": 0,
         "network": 1474,
-        "user": 0
+        "user": 5
       },
       "isolated_per_type": {
         "process": 0,
@@ -725,34 +747,36 @@
         "user": 0
       },
       "mean_degree_per_type": {
-        "process": 2611.76,
-        "file": 11.35,
+        "process": 2501.35,
+        "file": 11.31,
         "socket": 0.0,
         "network": 4.91,
-        "user": 0.0
+        "user": 3.2
       },
       "max_degree_per_type": {
-        "process": 24608,
+        "process": 24597,
         "file": 2574,
         "socket": 0,
         "network": 1878,
-        "user": 0
+        "user": 11
       },
       "edges_per_triple": {
         "network/net_dns_query/network": 939,
         "network/net_dns_response/network": 939,
         "process/net_http_request/network": 3476,
         "process/handle_close/file": 40143,
-        "process/file_access/file": 40759,
-        "process/handle_request/file": 41634,
-        "process/handle_duplicate/file": 420,
+        "process/file_access/file": 40758,
+        "process/handle_request/file": 41632,
         "process/process_create/process": 113,
         "process/file_delete/file": 1150,
-        "process/process_exit/process": 84
+        "process/process_exit/process": 84,
+        "user/user_priv_grant/process": 14,
+        "user/user_logon/process": 1,
+        "user/user_explicit_logon/process": 1
       },
       "skipped_unknown_op": 0,
       "skipped_disallowed_triple": 0,
-      "elapsed_s": 10.2
+      "elapsed_s": 10.37
     }
   ]
 }

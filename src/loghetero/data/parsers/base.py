@@ -86,11 +86,14 @@ class EdgeType(str, Enum):
     NET_DNS_QUERY = "net_dns_query"         # network -> network
     NET_DNS_RESPONSE = "net_dns_response"   # network -> network
 
-    # User auth (placeholder for Phase 1.4+; ATLAS does not surface logon
-    # events through our 7-EventID dispatch yet, but the enum slot is
-    # reserved so Phase 5+ can wire user nodes without adding to this enum).
-    USER_LOGON = "user_logon"
-    USER_LOGOFF = "user_logoff"
+    # User auth (Q-1 mini-checkpoint after Checkpoint 3): ATLAS now emits these
+    # via the 11-EventID dispatch (4624 with LogonType filter / 4625 / 4672 /
+    # 4648). DARPA TC E3 will reuse them through Principal-driven event chains.
+    USER_LOGON = "user_logon"                  # 4624 with LogonType in {3, 9, 10}
+    USER_LOGOFF = "user_logoff"                # reserved for future
+    USER_LOGON_FAIL = "user_logon_fail"        # 4625 (always emitted -- failure is rare + high signal)
+    USER_PRIV_GRANT = "user_priv_grant"        # 4672 (special privileges to new logon)
+    USER_EXPLICIT_LOGON = "user_explicit_logon"  # 4648 (logon with explicit credentials, e.g. runas)
 
     # Bottom type: an operation we don't know how to map. Builder will skip
     # edges with this type rather than guess a wrong (src, dst) triple.
@@ -128,9 +131,12 @@ ALLOWED_EDGE_TRIPLES: frozenset[tuple[NodeType, EdgeType, NodeType]] = frozenset
         (NodeType.process, EdgeType.NET_HTTP_REQUEST, NodeType.network),
         (NodeType.network, EdgeType.NET_DNS_QUERY, NodeType.network),
         (NodeType.network, EdgeType.NET_DNS_RESPONSE, NodeType.network),
-        # User auth
+        # User auth (Q-1 mini-checkpoint -- 5 triples for the 5 USER_* edges)
         (NodeType.user, EdgeType.USER_LOGON, NodeType.process),
         (NodeType.user, EdgeType.USER_LOGOFF, NodeType.process),
+        (NodeType.user, EdgeType.USER_LOGON_FAIL, NodeType.process),
+        (NodeType.user, EdgeType.USER_PRIV_GRANT, NodeType.process),
+        (NodeType.user, EdgeType.USER_EXPLICIT_LOGON, NodeType.process),
     }
 )
 

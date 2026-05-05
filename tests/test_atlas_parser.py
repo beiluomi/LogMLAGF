@@ -213,3 +213,199 @@ class TestSecurityEventsParser:
 
     def test_log_type_constant(self) -> None:
         assert SecurityEventsParser.LOG_TYPE == "atlas.security_events"
+
+
+# ---------------------------------------------------------------------------
+# User-logon EventIDs (Q-1 mini-checkpoint: 4624 / 4625 / 4672 / 4648)
+# ---------------------------------------------------------------------------
+
+
+def _make_4624_sample(logon_type: str, account: str = "alice", domain: str = "CORP") -> str:
+    """Build a single-record CSV sample for EventID 4624 with a chosen LogonType.
+
+    Subject section uses SYSTEM (the typical 4624 pattern); New Logon section
+    carries the actual logon-target account. With our last-wins body parser,
+    ``Account Name`` resolves to the New Logon value.
+    """
+    return (
+        "﻿Keywords\tDate and Time\tSource\tEvent ID\tTask Category\n"
+        f'Audit Success\t11/5/2018 9:00:00 PM\tMicrosoft-Windows-Security-Auditing\t4624\tLogon\t"An account was successfully logged on.\n'
+        "\n"
+        "Subject:\n"
+        "\tSecurity ID:\t\tSYSTEM\n"
+        "\tAccount Name:\t\tWIN-D65GVM5K5FO$\n"
+        "\tAccount Domain:\t\tWORKGROUP\n"
+        "\tLogon ID:\t\t0x3e7\n"
+        "\n"
+        f"Logon Type:\t\t\t{logon_type}\n"
+        "\n"
+        "New Logon:\n"
+        "\tSecurity ID:\t\tS-1-5-21-1\n"
+        f"\tAccount Name:\t\t{account}\n"
+        f"\tAccount Domain:\t\t{domain}\n"
+        "\tLogon ID:\t\t0x12345\n"
+        "\n"
+        "Process Information:\n"
+        "\tProcess ID:\t0x204\n"
+        '\tProcess Name:\tC:\\Windows\\System32\\winlogon.exe"\n'
+    )
+
+
+class TestUserLogon4624LogonTypeFilter:
+    """Counter-examples per Q-1 mini-checkpoint spec: only LogonType in {3, 9, 10} admitted."""
+
+    def test_logon_type_2_interactive_filtered(self, tmp_path: Path) -> None:
+        # Counter-example: Interactive console logon = noise per spec.
+        p = _write_tmp(tmp_path, "security_events.txt", _make_4624_sample("2"))
+        stats = ParseStats()
+        events = list(
+            SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1", stats=stats)
+        )
+        assert events == []
+        # Header + filtered 4624 = 2 skipped, 0 success, 0 failed
+        assert stats.success == 0
+        assert stats.failed == 0
+        assert stats.skipped == 2
+
+    def test_logon_type_5_service_filtered(self, tmp_path: Path) -> None:
+        # Counter-example: Service logon = the dominant ATLAS background noise.
+        p = _write_tmp(tmp_path, "security_events.txt", _make_4624_sample("5"))
+        stats = ParseStats()
+        events = list(
+            SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1", stats=stats)
+        )
+        assert events == []
+        assert stats.skipped == 2
+
+    def test_logon_type_3_network_admitted(self, tmp_path: Path) -> None:
+        # Network logon = T1021 lateral movement signal. MUST be admitted.
+        p = _write_tmp(
+            tmp_path, "security_events.txt", _make_4624_sample("3", account="bob", domain="DOM")
+        )
+        events = list(SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1"))
+        assert len(events) == 1
+        e = events[0]
+        assert e.attributes["event_id"] == "4624"
+        assert e.subject == "DOM\\bob"
+        assert e.subject_type is NodeType.user
+        assert e.subject_type is NodeType.user
+        assert "winlogon.exe" in e.obj
+        assert e.obj_type is NodeType.process
+        assert e.operation == EdgeType.USER_LOGON
+        assert e.attributes["logon_type"] == "3"
+
+    def test_logon_type_9_new_credentials_admitted(self, tmp_path: Path) -> None:
+        # NewCredentials = runas / credential reuse. APT signal.
+        p = _write_tmp(tmp_path, "security_events.txt", _make_4624_sample("9", account="charlie"))
+        events = list(SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1"))
+        assert len(events) == 1
+        assert events[0].operation == EdgeType.USER_LOGON
+        assert events[0].attributes["logon_type"] == "9"
+
+    def test_logon_type_10_rdp_admitted(self, tmp_path: Path) -> None:
+        # RemoteInteractive = RDP = T1021.001 horizontal movement. APT critical.
+        p = _write_tmp(tmp_path, "security_events.txt", _make_4624_sample("10"))
+        events = list(SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1"))
+        assert len(events) == 1
+        assert events[0].operation == EdgeType.USER_LOGON
+        assert events[0].attributes["logon_type"] == "10"
+
+    def test_user_id_uses_domain_account_format(self, tmp_path: Path) -> None:
+        # When both Account Domain + Account Name present, subject id is "DOMAIN\Account".
+        p = _write_tmp(
+            tmp_path,
+            "security_events.txt",
+            _make_4624_sample("3", account="dave", domain="EVILCORP"),
+        )
+        e = next(SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1"))
+        assert e.subject == "EVILCORP\\dave"
+
+
+class TestUserLogonOtherEventIds:
+    def test_4625_failure_emits_user_logon_fail(self, tmp_path: Path) -> None:
+        sample = (
+            "﻿Keywords\tDate and Time\tSource\tEvent ID\tTask Category\n"
+            'Audit Failure\t11/5/2018 9:01:00 PM\tMicrosoft-Windows-Security-Auditing\t4625\tLogon\t"An account failed to log on.\n'
+            "\n"
+            "Subject:\n"
+            "\tAccount Name:\t\tSYSTEM\n"
+            "\n"
+            "Account For Which Logon Failed:\n"
+            "\tAccount Name:\t\teve\n"
+            "\tAccount Domain:\t\tEVILCORP\n"
+            "\n"
+            "Failure Information:\n"
+            "\tFailure Reason:\t\tUnknown user name or bad password.\n"
+            "\tStatus:\t0xC000006D\n"
+            "\n"
+            "Process Information:\n"
+            '\tCaller Process Name:\tC:\\Windows\\System32\\lsass.exe"\n'
+        )
+        p = _write_tmp(tmp_path, "security_events.txt", sample)
+        events = list(SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1"))
+        assert len(events) == 1
+        e = events[0]
+        assert e.attributes["event_id"] == "4625"
+        assert e.subject == "EVILCORP\\eve"
+        assert e.subject_type is NodeType.user
+        assert e.operation == EdgeType.USER_LOGON_FAIL
+        assert "lsass.exe" in e.obj
+        assert e.obj_type is NodeType.process
+        # Failure reason captured in attrs (Phase 5 RAPA can use it)
+        assert "Unknown user name" in (e.attributes.get("failure_reason") or "")
+
+    def test_4672_priv_grant_uses_lsass_canonical_obj(self, tmp_path: Path) -> None:
+        sample = (
+            "﻿Keywords\tDate and Time\tSource\tEvent ID\tTask Category\n"
+            'Audit Success\t11/5/2018 9:02:00 PM\tMicrosoft-Windows-Security-Auditing\t4672\tSpecial Logon\t"Special privileges assigned to new logon.\n'
+            "\n"
+            "Subject:\n"
+            "\tSecurity ID:\t\tS-1-5-21-2\n"
+            "\tAccount Name:\t\tadministrator\n"
+            "\tAccount Domain:\t\tCORP\n"
+            "\tLogon ID:\t\t0x99\n"
+            "\n"
+            '\tPrivileges:\t\tSeTcbPrivilege"\n'
+        )
+        p = _write_tmp(tmp_path, "security_events.txt", sample)
+        events = list(SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1"))
+        assert len(events) == 1
+        e = events[0]
+        assert e.attributes["event_id"] == "4672"
+        assert e.subject == "CORP\\administrator"
+        assert e.subject_type is NodeType.user
+        # 4672 has no Process Name; LSASS is canonical privilege grantor.
+        assert e.obj == "lsass.exe"
+        assert e.obj_type is NodeType.process
+        assert e.operation == EdgeType.USER_PRIV_GRANT
+        assert e.attributes["privileges"] == "SeTcbPrivilege"
+
+    def test_4648_explicit_credentials_emits_user_explicit_logon(self, tmp_path: Path) -> None:
+        sample = (
+            "﻿Keywords\tDate and Time\tSource\tEvent ID\tTask Category\n"
+            'Audit Success\t11/5/2018 9:03:00 PM\tMicrosoft-Windows-Security-Auditing\t4648\tLogon\t"A logon was attempted using explicit credentials.\n'
+            "\n"
+            "Subject:\n"
+            "\tAccount Name:\t\tcaller_user\n"
+            "\n"
+            "Account Whose Credentials Were Used:\n"
+            "\tAccount Name:\t\timpersonated_admin\n"
+            "\tAccount Domain:\t\tCORP\n"
+            "\n"
+            "Target Server:\n"
+            "\tTarget Server Name:\tdc01.corp.local\n"
+            "\n"
+            "Process Information:\n"
+            '\tProcess Name:\tC:\\Windows\\System32\\runas.exe"\n'
+        )
+        p = _write_tmp(tmp_path, "security_events.txt", sample)
+        events = list(SecurityEventsParser().parse_file(p, scenario_id="T", host_id="h1"))
+        assert len(events) == 1
+        e = events[0]
+        assert e.attributes["event_id"] == "4648"
+        # last-wins picks the impersonated account, not the caller
+        assert e.subject == "CORP\\impersonated_admin"
+        assert e.subject_type is NodeType.user
+        assert "runas.exe" in e.obj
+        assert e.operation == EdgeType.USER_EXPLICIT_LOGON
+        assert e.attributes["target_server"] == "dc01.corp.local"
