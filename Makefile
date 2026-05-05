@@ -1,4 +1,4 @@
-.PHONY: help hello lint format test sync sync-ml prepare-data pretrain finetune-anomaly ablation cross-dataset anonymize clean
+.PHONY: help hello lint format test integration-test sync sync-ml prepare-data pretrain finetune-anomaly ablation cross-dataset anonymize clean
 
 UV := uv
 PY := $(UV) run python
@@ -10,7 +10,8 @@ help:
 	@echo "  make hello            - Smoke check: print version + GPU availability"
 	@echo "  make lint             - Run ruff + mypy"
 	@echo "  make format           - Auto-format with ruff"
-	@echo "  make test             - Run pytest"
+	@echo "  make test             - Run pytest (excludes 'integration' marker)"
+	@echo "  make integration-test - Install ML stack and run integration-marked tests"
 	@echo "  --- Phase-gated targets (placeholders until each phase lands) ---"
 	@echo "  make prepare-data     - Phase 1: build data pipeline"
 	@echo "  make pretrain         - Phase 7: joint HTGN-LM + RAPA-GTCL pretraining"
@@ -38,7 +39,11 @@ format:
 	$(UV) run ruff check --fix src tests
 
 test:
-	$(UV) run pytest tests
+	$(UV) run pytest tests -m "not integration"
+
+integration-test:
+	$(UV) sync --extra dev --extra ml
+	$(UV) run pytest tests -m integration --tb=short
 
 # --- Phase-gated targets ---
 

@@ -80,3 +80,6 @@ files = ["src"]
 testpaths = ["tests"]
 addopts = "-v --tb=short --strict-markers"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "integration: tests that require the ML stack (torch / pyg / transformers); run via `make integration-test` or the integration GH Actions workflow",
+]
