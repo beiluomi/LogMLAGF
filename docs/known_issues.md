@@ -2,6 +2,21 @@
 
 ## 经验启发式校准记录（避免被早期 GNN 数字误导）
 
+### Borderline RFC 期间数字与最终 commit 数字不一致时跟随实测（2026-05-06，Checkpoint 10 lesson 标准范式）
+
+**现象**：Checkpoint 10 Task B 在 borderline RFC 期间，agent 报 user 的 AUC 数字 "0.825 ± 0.008" 来自我早期单 seed 高位读数（seed 42 final epoch 的 0.8251），user 据此构造 Option A conditional pass 决议 + tag message 模板。RFC 落地时 sub-agent 重跑 4-seed 聚合得 multi-seed 实测 mean **0.8144 ± 0.0068**——与 RFC 期间数字差 ~0.01（CUDA matmul 算法非确定性导致的典型 deep learning multi-seed run-to-run variation）。
+
+**采取的纪律（user 标记为标准范式）**：commit 与 tag message 中的最终数字**跟随 multi-seed 实测**（0.8144），不刚性沿用 RFC 期间数字（0.825）。Trade-off：略偏离 user 用 "精确措辞" 给出的 tag template，但保持数据诚实。理由——RFC 期间数字是基于 partial / interim 测量的近似，最终落档应以 canonical multi-seed aggregate 为准；如固守 RFC 数字，Phase 4 BERT 重测对比 baseline 会用错（0.825 vs 0.8144 的 0.01 偏差会污染 Δ 计算）。
+
+**未来类似情境的标准处理**：
+
+1. Borderline RFC 期间 agent 报数字必须明确标注 "interim single-seed reading" 或 "preliminary partial run"；user 决议时知道这是近似数字。
+2. RFC 决议执行（commit / tag）时如有更精确测量（multi-seed aggregate / 更大样本 / 更稳定 sampler），**用最新最精确数字替换 RFC 期间数字**，并在 commit message + relevant docs 显式说明替换原因（如 "multi-seed 聚合替代单 seed 高位读数；±0.01 因 CUDA 非确定性"）。
+3. 替换后的数字成为后续 phase 重测对比的 canonical baseline；旧 RFC 数字仅作历史 audit trail 保留，不再用于实际计算。
+4. 这一纪律的核心是 "诚实跟随数据"——user 给的 tag template 是 form prescription，numbers 本身应反映最终最精确测量。Form-following（用 user 给的精确措辞）必须让位 data-following（用最新实测数字）。
+
+**Phase 12 Methods 写作 hook**：本条作为 "我们如何处理 conditional pass 的细节诚实" 在 Methods 章节"Reproducibility & methodology" 段中作为 evidence point，强调 "we report final multi-seed aggregated numbers, not interim single-seed best reads, even when this slightly deviates from in-flight discussion".
+
 ### Spec 与代码常数同步纪律（2026-05-05，Checkpoint 7 lesson）
 
 - **现象**：Phase 3 launch spec 写"Time2Vec 32 + EdgeType one-hot 25 → concat 57"，但 Q-1 mini-checkpoint 后 EdgeType 实际增至 29（加 3 USER_* + UNKNOWN），concat 维度应为 61 而非 57。这是 spec 与代码常数 drift 的一例。
