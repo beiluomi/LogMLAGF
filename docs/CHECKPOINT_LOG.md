@@ -137,4 +137,32 @@
 
 ---
 
-*下一条记录：Phase 2 / Checkpoint 6 (BERT 文本编码器集成)。*
+## Checkpoint 6 — Phase 2 BERT 文本编码器集成
+
+- **完成日期**：2026-05-05
+- **Commit**：（本次 commit；hash 在 git log 可见）
+- **核心交付物**：
+  - `src/loghetero/models/encoders/bert_text.py`：`build_bert_text_encoder()` 返回 (model, tokenizer)；`TrainMode` enum 三档（`frozen` / `lora` / `full`）；`LoRAConfig` 默认 `r=8, alpha=16, target_modules=(query, value), layers_to_transform=(8,9,10,11)` 即 BERT-base 后 4 层 q+v；`encode_texts()` 提供 cls/mean pooling 接口；`count_trainable_parameters()` 报告参数预算。
+  - 嵌入层 resize + synonym-mean init via 现有 `loghetero.data.tokenizer.init_special_token_embeddings`，loud guard if <95% 初始化成功。
+  - `tests/test_bert_text.py`：10 integration-marked 测试，覆盖 vocab resize / 三 mode forward / pool 接口 / 同语义事件聚合。
+  - `scripts/bert_sanity_check.py`：在 ATLAS S1 sample 上跑 NN retrieval，输出 benign + noteworthy 双 query top-5 NN，落 `data/bert_sanity_check.json`。
+- **关键 metric**：
+  - 测试：**150 / 150 全绿**（140 non-integration + 10 BERT integration）；BERT 集成测试单独耗时 52.7s 含模型加载。
+  - Vocab：30,522 (BERT-base) → **30,678** (= +156 LogHetero special tokens)，与 launch spec 完全一致。
+  - 三 mode 参数预算（bert-base ~110M total）：frozen = 0 trainable；full = 100% trainable；lora (r=8) = 0.001%–5% trainable（断言通过）。
+  - Sanity check：benign DNS query top-5 NN 全是其他 DNS query (cos-sim 0.97-1.00)；noteworthy file_access (mmc.exe → aalsahee) top-5 NN 全是同模式 file_access (cos-sim 1.00)。语义聚合工作。
+- **决策点**：
+  - LoRA 目标层选择：query + value 投影（标准 BERT LoRA 推荐配置），后 4 层 (8/9/10/11)，r=8 起始（Phase 7 ablation B6 可调）。
+  - Pooling 接口：cls + mean 两档；Phase 4 跨模态融合默认用 cls，Phase 7 ablation 可换 mean。
+  - 95% 初始化阈值 guard：与 `tests/test_tokenizer.py::test_init_embeddings_runs_without_error` 一致；任何 SYNONYM_INIT 退化触发 `RuntimeError` 并指向 `scripts/check_synonym_init.py`。
+- **新增 known_issues**：无。
+- **PROGRESS.md / CHECKPOINT_LOG.md 更新**：本 commit 同时整体覆写 PROGRESS.md（Phase 2 完成、commit chain 至当前、Phase 3 预期）+ 追加本条 CHECKPOINT_LOG.md 记录。
+- **执行 Phase 2 launch spec 完成清单**：
+  - [x] 三种模式 forward 都不报错（test_frozen_forward_no_grad / test_full_forward_all_trainable / test_lora_forward_only_adapters_trainable 全绿）
+  - [x] tokenizer 数量正确扩展（test_vocab_size_30522_to_30678）
+  - [x] sanity check 通过（benign query DNS 同类聚合 + noteworthy query file_access 同类聚合）
+  - [x] PROGRESS.md / CHECKPOINT_LOG.md 同步更新
+
+---
+
+*下一条记录：Phase 3 / Checkpoint 7 (HTGN Time2Vec / TGN memory / HGT layer，创新点 1 第一部分)。*

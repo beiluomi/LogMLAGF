@@ -1,0 +1,98 @@
+{
+  "model": "bert-base-uncased",
+  "mode": "frozen",
+  "n_events": 600,
+  "top_k": 5,
+  "benign_query": {
+    "query_idx": 0,
+    "query": {
+      "log_type": "atlas.dns",
+      "operation": "EdgeType.NET_DNS_QUERY",
+      "subject": "192.168.223.128",
+      "obj": "192.168.223.2"
+    },
+    "neighbours": [
+      {
+        "idx": 170,
+        "cos_sim": 0.9999998807907104,
+        "log_type": "atlas.dns",
+        "operation": "EdgeType.NET_DNS_QUERY",
+        "text_snippet": "net_dns_query subject=[IP_V4] object=[IP_V4] query_name=detectportal.firefox.com raw_description=standard query [HEX] a "
+      },
+      {
+        "idx": 19,
+        "cos_sim": 0.9727758765220642,
+        "log_type": "atlas.dns",
+        "operation": "EdgeType.NET_DNS_QUERY",
+        "text_snippet": "net_dns_query subject=[IP_V4] object=[IP_V4] query_name=ocsp.digicert.com raw_description=standard query [HEX] a ocsp.di"
+      },
+      {
+        "idx": 158,
+        "cos_sim": 0.9727758765220642,
+        "log_type": "atlas.dns",
+        "operation": "EdgeType.NET_DNS_QUERY",
+        "text_snippet": "net_dns_query subject=[IP_V4] object=[IP_V4] query_name=ocsp.digicert.com raw_description=standard query [HEX] a ocsp.di"
+      },
+      {
+        "idx": 76,
+        "cos_sim": 0.9727758169174194,
+        "log_type": "atlas.dns",
+        "operation": "EdgeType.NET_DNS_QUERY",
+        "text_snippet": "net_dns_query subject=[IP_V4] object=[IP_V4] query_name=ocsp.digicert.com raw_description=standard query [HEX] a ocsp.di"
+      },
+      {
+        "idx": 66,
+        "cos_sim": 0.9727758169174194,
+        "log_type": "atlas.dns",
+        "operation": "EdgeType.NET_DNS_QUERY",
+        "text_snippet": "net_dns_query subject=[IP_V4] object=[IP_V4] query_name=ocsp.digicert.com raw_description=standard query [HEX] a ocsp.di"
+      }
+    ]
+  },
+  "noteworthy_query": {
+    "query_idx": 400,
+    "query": {
+      "log_type": "atlas.security_events",
+      "operation": "EdgeType.FILE_ACCESS",
+      "subject": "C:\\Windows\\System32\\mmc.exe",
+      "obj": "C:\\Users\\aalsahee"
+    },
+    "neighbours": [
+      {
+        "idx": 403,
+        "cos_sim": 1.0000001192092896,
+        "log_type": "atlas.security_events",
+        "operation": "EdgeType.FILE_ACCESS",
+        "text_snippet": "file_access subject=[PATH_WIN_SYS32] object=[PATH_WIN_USERS] access_mask=[HEX] account_name=aalsahee event_id=4663 keywo"
+      },
+      {
+        "idx": 409,
+        "cos_sim": 1.0000001192092896,
+        "log_type": "atlas.security_events",
+        "operation": "EdgeType.FILE_ACCESS",
+        "text_snippet": "file_access subject=[PATH_WIN_SYS32] object=[PATH_WIN_USERS] access_mask=[HEX] account_name=aalsahee event_id=4663 keywo"
+      },
+      {
+        "idx": 418,
+        "cos_sim": 1.0000001192092896,
+        "log_type": "atlas.security_events",
+        "operation": "EdgeType.FILE_ACCESS",
+        "text_snippet": "file_access subject=[PATH_WIN_SYS32] object=[PATH_WIN_USERS] access_mask=[HEX] account_name=aalsahee event_id=4663 keywo"
+      },
+      {
+        "idx": 421,
+        "cos_sim": 1.0000001192092896,
+        "log_type": "atlas.security_events",
+        "operation": "EdgeType.FILE_ACCESS",
+        "text_snippet": "file_access subject=[PATH_WIN_SYS32] object=[PATH_WIN_USERS] access_mask=[HEX] account_name=aalsahee event_id=4663 keywo"
+      },
+      {
+        "idx": 412,
+        "cos_sim": 1.0000001192092896,
+        "log_type": "atlas.security_events",
+        "operation": "EdgeType.FILE_ACCESS",
+        "text_snippet": "file_access subject=[PATH_WIN_SYS32] object=[PATH_WIN_USERS] access_mask=[HEX] account_name=aalsahee event_id=4663 keywo"
+      }
+    ]
+  }
+}
