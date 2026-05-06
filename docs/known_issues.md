@@ -363,6 +363,36 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
   - **Phase 12 写作要点**：放在 Methods 章节"4.x Text encoder design"段，作为我们选择 frozen BERT-base + cleaner-driven placeholder 这个工程组合的"empirical validation" 段落论据。可附 cos-sim 数字 + 一两个 NN retrieval 例（"DNS query → DNS query"、"file_access → file_access"）作为 figure。
   - **可对照写作 hook**：cf. Patton (Jin et al., ACL '23) 那篇 paper 也讨论了在 text-rich network 上预训练 LM 的必要性 vs 直接用通用 LM 的代价权衡——我们的结论是 "for log domain with proper cleaner, frozen general LM works"。
 
+### multi-agent review pattern 在创新模块代码验证中的两类分工（2026-05-06，Checkpoint 12 lesson 标准范式）
+
+**背景**：subagent-driven-development skill 在 Phase 4 Checkpoint 12（双向跨模态注意力模块实施）首次正式应用，确立了 implementer subagent → spec compliance reviewer subagent → code quality reviewer subagent → fix subagent 四步验证 pattern。该 pattern 在本次实施中暴露了一个真实方法论收获：spec compliance review 与 code quality review 是两类不同的分工，互补不冗余，多 agent 分工把这两种视角拆开后避免了任一 agent 视角偏置遗漏。
+
+**两类分工的精确定义**：
+
+1. **Spec compliance reviewer 看 "实现是否符合规范"**：检查 module API 签名、参数名、返回值类型、required tests 是否完备、required prohibitions 是否被遵守、外部接口是否与 spec 字面对齐。视角是 spec 文档与代码的字面对应——"spec 说要 X，代码有没有 X？"
+2. **Code quality reviewer 看 "测试是否真验证了规范"**：检查测试断言是否能 catch 真实 bug、模块 docstring 是否与实现真实状态一致、命名是否准确、内部一致性是否成立。视角是代码内部自洽性与测试有效性——"代码自洽吗？测试真的能 catch 它声称要 catch 的东西吗？"
+
+**Checkpoint 12 实测的两轮 catch**：
+
+- Spec compliance review（首轮，Sonnet）报 ⚠️ Compliant 无 MUST_FIX，三处 implementer self-flag 全部得到 reasoned verdict（input projection 共享 acceptable / grad norm 阈值 1e6 数学合理 / NaN guard 正确性必需）；判定通过。
+- Code quality review（次轮，Sonnet）独立 catch 两条 Important 问题，spec review 完全 miss 但确实存在：
+  - **Important 1**：模块 docstring (line 21-22) 写 "no sharing" 但实际 input projection (text_proj / graph_proj) 跨两个方向共享；docstring 与实现状态字面矛盾，将误导任何做参数审计或推断梯度更新机制的读者。
+  - **Important 2**：`test_independent_params_diverge_after_update` 断言 `tg_changed or gt_changed` 是 tautological——loss = fused_text.sum() 只走 Text→Graph 路径，gt_changed 必然 False，化简为单变量断言 `tg_changed`；aliased tensor (text_proj.weight 和 gt 路径里的某个权重共用 storage 这种 bug) 仍能 trivially pass。修复为 `tg_changed and not gt_changed`：aliased tensor 会让 gt_changed 与 tg_changed 同步变化，断言 fail，正确捕获 bug。
+
+**为何两类分工不能合并**：
+
+- Spec reviewer 的视角是 "spec → 代码"，遵循规范条目逐项核对；这种视角对 docstring 内部矛盾不敏感，因为 docstring 不是 spec 的一部分；对测试断言强度不敏感，因为 spec 说的是"测试覆盖 N 类，每类至少 1 项"，没说"测试断言必须能 catch 特定 bug class"。
+- Code quality reviewer 的视角是 "代码 → 一致性"，独立审视代码是否说服自己；这种视角对 spec 字面对应不敏感（已假定 spec review 通过），但对内部矛盾、tautological 断言、误导性 docstring 高度敏感。
+- 单一 agent 难以同时持两种视角且不偏置任一方。多 agent 分工把两种视角分配给独立 subagent，避免任一 agent 视角偏置遗漏。
+
+**Phase 12 论文 Methods 章节使用方式**：
+
+本方法论作为 "我们如何保证创新模块代码的科研验证质量" 工程方法论支撑，写入 Methods 章节相关段落（建议放在 "Reproducibility & methodology" 子节）。可对照写作 hook：cf. 主流深度学习论文通常只报告 unit test 通过率作为代码质量证据；我们额外报告 multi-agent review pattern 的两类分工 + 真实 catch 案例（Checkpoint 12 docstring 矛盾 + tautological 断言两条 Important 问题），这种工程纪律本身可作为 Methods 章节 contribution evidence——审稿人可以看到具体方法论的两类视角分工与真实 catch 数字而非"我们做了 unit test"的黑盒陈述。
+
+**确立为 Phase 4 后续 sub-checkpoint 标准实施路径**：每个 sub-checkpoint (13 / 14 / 14.5) 都走 implementer → spec compliance review → code quality review → fix if needed 四步 pattern，**不允许跳过 code quality review 这一步**。Phase 5+ 创新模块（RAPA-GTCL 对比学习目标、改造 GTCL 损失等）继续延用该 pattern。
+
+**例外情况**：纯验证脚本（如 smoke test、ablation driver、benchmark 脚本）不需要走 4 步 pattern，因为这类脚本本身不是 "创新模块代码" 而是 "验证创新模块代码的工具"。verification 脚本走单 agent 实施 + 主 agent sanity check 即可。该例外的理由：spec / code quality 两类视角主要 catch "代码声称做 X 但实际做 Y" 这种创新模块语义偏差，而验证脚本的语义是"实测某 metric"——脚本跑通且 metric 数字与预期范围对齐就已经是自验证，再加一层 review 边际收益小于成本。
+
 ## Phase 7 待办
 
 ### TGN msg_store 跨 batch 清理（2026-05-06，Checkpoint 9 发现）
