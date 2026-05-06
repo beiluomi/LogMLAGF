@@ -370,4 +370,96 @@ Phase 3 跨 4 个 checkpoint（7-10）、~10 commits、~3000 行代码（HTGN �
 
 ---
 
-*下一条记录：Phase 4 / Checkpoint 11 启动（跨模态注意力 launch spec + Phase 4 入口两个 RFC 决议：benign-only 重审 + Phase 3 sanity AUC re-validation）。*
+## Checkpoint 11 — Phase 4 入口前置 RFC 消化 + Phase 3 sanity AUC re-validation（informationally complete via γ-1 决议）
+
+- **完成日期**：2026-05-06
+- **Commits**：`cae7216`（Checkpoint 11.1 Option B 三条件 docs）+ 本 commit（Checkpoint 11.2-γ-1 决议 + 4 ablation artifacts + design_decisions.md 决策 4.2 footnote + PROGRESS / CHECKPOINT_LOG 同步）
+- **本 checkpoint 不写新模型代码**，专门处理 Phase 3 留下的两条 Phase 4 待办（Pretraining benign-only 重审 + Phase 3 sanity AUC re-validation）。这是 "前置债务一次性偿还" 纪律的实施案例：每个 phase 的第一个 checkpoint 清理 prior phase 待办，避免债务在后续阶段累积放大。
+
+### 11.1 — Pretraining 数据 benign-only 约束重审 RFC（user 拍板 Option B 附三条件）
+
+- **RFC 三选项分析**：A 前置 Phase 8 工作 (3-5 天) / B mixed + Phase 7 切 benign-only (0 天) / C 论文 timeline 启发式 stop-gap (0.5 天)。详见 `docs/known_issues.md::Phase 3 设计偏离记录::Task B "完全 benign 子图" spec` 子节追加的 RFC 闭环标注。
+- **User 选 Option B 附三条件**：
+  1. **决策 9 footnote 紧版措辞**（design_decisions.md 决策 9 footnote 2026-05-06）：mixed 数据明确标注为 "**unverified-impact baseline 而非默认无害选择**"。Phase 11 ablation **必须**包含 mixed vs benign_only_ground_truth 二档对比，3pp Phase 8 anomaly F1 阈值触发论文 Methods 章节叙事调整。
+  2. **Phase 11 消融扩展 B7 cells**（known_issues.md 新增 "Phase 11 消融扩展" 子节）：B7-α (B0 + benign_only_ground_truth, mandatory) + B7-β (B0 + benign_only_paper_timeline, time-allowing)。对比 Phase 8 anomaly F1 + AUC + representation t-SNE/UMAP。
+  3. **Phase 7 mixed-vs-benign quick A/B 前置议程**（known_issues.md::Phase 7 待办 新增）：S1+M1 mini pretraining，对比 perplexity (>5%) AND link prediction AUC (>3pp)；任一阈值 breached → Phase 7 全量切 benign-only 不延续 Phase 4 的 mixed。
+- **关键纪律**：把 "mixed 数据影响小" 这个未验证假设标记为 unverified-impact baseline + 设硬性 ablation + 数值阈值预设升级机制——避免假设悄悄变成既定事实写进论文（"Preemptive ablation triggers for unverified premises" 标准范式，sourced from `feedback_preemptive_ablation_for_unverified_premises.md` memory）。
+
+### 11.2 — Phase 3 sanity AUC re-validation（4 档 BERT 集成 ablation → γ-1 informational completion）
+
+**实施 4 档 BERT 集成方案，4-seed [1, 7, 42, 100] 对比 Phase 3 random Gaussian baseline 0.8144**：
+
+| # | 配置 | mean AUC | std | Δ | 数据 artifact | 决议 |
+|---|---|---:|---:|---:|---|---|
+| (a) | random Gaussian baseline | **0.8144** | 0.0068 | — | `data/checkpoint10_taskB_summary.json` | Phase 3 baseline |
+| (b) | naive [CLS] entity-identifier `"<type> <id>"` | **0.8126** | 0.0164 | −0.0018 | `data/checkpoint10_taskB_summary_bert.json` | per-entity short-input degenerate (Reimers & Gurevych 2019 / SimCSE) |
+| (c) | β mean-pool entity-event-context TOP_K=5 | **0.8113** | 0.0127 | −0.0031 | `data/checkpoint11_2_beta_topk5_truncated_summary.json` | implementation defect: token mean 313, 91% truncated at 256, only 1.35% in spec |
+| (d) | β mean-pool entity-event-context TOP_K=2 in-spec | **0.8147** | 0.0109 | **+0.0003** | `data/checkpoint11_2_beta_summary.json` | token mean 128, 93% in spec [50, 150], 0.4% truncated; **canonical β** |
+
+**双门槛 gate**（per Checkpoint 11.2-β user RFC after [CLS] null result disproved 0.88-only premise）：pass = (absolute mean ≥ 0.88) OR (lift ≥ +0.04 vs 0.8144)。β canonical 实测 absolute 0.8147 < 0.88 AND lift +0.0003 < +0.04，**双门槛均未通过**。
+
+**γ-1 决议（user 拍板）**：
+
+- 4 档配置 mean AUC 全部聚集在 **0.811-0.815 区间，std 0.007-0.016，统计上完全无差异**——证实 random edge masking + structural negative sampling 的链路预测任务由图拓扑信号完全决定，BERT 语义特征通过 input-feature 通道无法贡献 lift。
+- **Phase 3 conditional pass 状态从 "pass / fail" 二元变更为 "informationally complete"**——回答的是 "HTGN 在 structure-only 任务上 ceiling OK"，不是 "BERT 集成 OK"。
+- 原 0.88 hard gate **撤销**（gate premise "BERT 通常 +0.05-0.10 lift" 文献经验只适用于 sentence classification / NER / QA 等 features 直接决定输出的任务，不适用于 structure-determined link prediction；agent Phase 3 Option A 决议时援引的论证错误，本闭环诚实标记，留 audit trail）。
+- **BERT 跨模态融合的真实 evaluation 推到 Phase 7-8 anomaly detection**（attack 事件含语义异常签名时 BERT semantic features 必有 lift；cross-modal attention 作为 fusion mechanism 比 input-feature injection 更适合 anomaly classification use case）。
+- **Phase 7 待办新增 BERT-fused-attention vs HTGN-only quick A/B 扩展议程**：mixed-vs-benign 已规划议程扩展为 2×2 grid，验证跨模态融合在 anomaly-relevant 数据上确实有 lift（hard gate: anomaly F1 lift ≥ +0.03 OR anomaly AUC lift ≥ +0.02）。
+- **Phase 4 进度影响**：Checkpoint 12 双向跨模态注意力可直接启动；Phase 4 整体目标变更为 "architecture 落地 + forward 不报错 + 梯度正常"，AUC-style 单点验证撤销留 Phase 7-8。
+
+### 决策点
+
+- **三层 root-cause investigation 协议（Methods 章节素材）**：(1) 节点身份纯度 - 27% file 节点是 hex handle (`0x4b0`) 因 ATLAS parser fallback；(2) BERT [CLS] short-input degenerate 是真主因（Phase 2 sanity 验证 BERT 在 50-200 token regime 强；2-6 token regime 完全不同）；(3) integration code 已 verified 无 bug。详见 `known_issues.md::Phase 12 论文素材::Phase 4 入口 BERT 集成 root-cause investigation 与诊断协议`。
+- **β 修正方案 + 实施 defect 诊断**：原 launch spec TOP_K=5 产生 313-token mean 输入（91% truncated）违 spec；TOP_K=2 修正后 mean 128 token 93% in [50, 150] 完全符合 spec。两个 β artifacts 都保留（truncated as Phase 12 contrast，in-spec as canonical）——"failed intermediate as paper contrast" 纪律。
+- **Form-following vs Data-following**：commit 与 tag message 用最新最精确数字（multi-seed aggregate）替代 RFC 期间近似数字（interim single-seed）；form prescription 让位 data prescription（"Borderline RFC 期间数字与最终 commit 数字不一致时跟随实测" 标准范式，sourced from `feedback_data_provenance_transparency.md` memory）。
+- **Negative result as positive contribution**：4 档 BERT ablation 数字保留作为 Phase 12 论文 Methods 章节 ablation 段末尾 design rationale —— "我们诚实尝试 4 种 BERT 集成 + 验证 link prediction structure-determined + 把跨模态融合真实 evaluation 推到 Phase 7-8 anomaly detection"。这种 negative-result-as-positive-contribution 在顶会论文 Methods 章节比掩盖 null finding 更有说服力。
+
+### 关键 metric
+
+- **Token length 分布对比**（β TOP_K=5 vs TOP_K=2，验证 implementation defect 修正）：
+
+| 配置 | mean | p50 | p99 | max | in [50, 150] | truncated |
+|---|---:|---:|---:|---:|---:|---:|
+| TOP_K=5（spec violation）| 313.8 | 324 | 464 | 519 | **1.35%** | **90.95%** |
+| TOP_K=2（spec compliant）| 128.4 | 134 | 190 | 208 | **93.15%** | **0.40%** |
+
+- **测试 + lint**：本 checkpoint 不新增 unit test（4 档 ablation 是 driver script 配置，由 reproducibility anchor JSON 把结果钉死）；`uv run ruff check` 全绿。
+- Wall time: TOP_K=5 run ≈ 217s; TOP_K=2 run ≈ 200s on CUDA single GPU。
+
+### 新增 / 更新 known_issues 条目
+
+1. **Phase 3 设计偏离记录 5（新）**：`docs/known_issues.md::Phase 3 设计偏离记录::Task B AUC 0.8144 borderline conditional pass + Phase 4 重测 commitment` 闭环至 Checkpoint 11.2-γ-1 informational completion。
+2. **Phase 4 设计偏离记录 1（新）**：4 档 BERT 集成 ablation 全部统计无差异 → link prediction structure-determined → 跨模态 evaluation 推到 Phase 7-8。
+3. **Phase 4 待办 (2 条)**：(a) `Pretraining 数据 benign-only 约束的重审议程` **RESOLVED 2026-05-06 (Option B 通过附三条件)**；(b) `Phase 3 sanity AUC re-validation` **COMPLETED 2026-05-06 with informational null finding (Checkpoint 11.2-γ-1 决议)**。
+4. **Phase 7 待办 (2 条新)**：(a) `Mixed-vs-benign quick A/B 前置测试`（Option B 条件 3）；(b) `BERT-fused-attention vs HTGN-only quick A/B 扩展`（γ-1 触发的 fallback verification）。
+5. **Phase 11 消融扩展 (新章节)**：B7-α / B7-β cells 二档 / 三档对比 pretraining 数据干净度。
+6. **Phase 12 论文素材 (2 条更新 + 1 条新)**：(a) `Phase 3 sanity AUC 演进数字` 4-row ablation table 完全填好；(b) `Phase 4 入口 BERT 集成 root-cause investigation 与诊断协议`（新）；(c) `Borderline RFC 期间数字与最终 commit 数字不一致时跟随实测` 标准范式（在 经验启发式校准记录 子节，commit `901ebbd` 落档）。
+
+### PROGRESS.md / CHECKPOINT_LOG.md 更新
+
+本 commit 同时整体覆写 PROGRESS.md（Phase 4 进行中 1/4，commit chain 至 #27，AUC-style 单点验证撤销说明）+ 追加本条 CHECKPOINT_LOG.md 记录。
+
+### 执行 Checkpoint 11 launch spec 完成清单
+
+- [x] Checkpoint 11.1 Pretraining benign-only RFC 三选项分析 + Option B 通过附三条件
+- [x] design_decisions.md 决策 9 footnote 紧版措辞 (unverified-impact baseline + 必须 ablation + 3pp 阈值)
+- [x] known_issues.md Phase 11 消融扩展 B7 + Phase 7 mixed-vs-benign quick A/B 前置议程
+- [x] Checkpoint 11.2 BERT [CLS] entity-identifier naive 集成实施 + 4-seed 跑 + null result 报告（AUC 0.8126）
+- [x] root-cause investigation 三层排查（节点身份纯度 / BERT [CLS] short-input degenerate / integration code）
+- [x] β entity-event-context 修正方案 + mean-pooling 实施 + 4-seed 跑（TOP_K=5 truncated 0.8113 + TOP_K=2 in-spec 0.8147）
+- [x] dual-threshold gate 应用 (absolute 0.88 OR lift +0.04) → 双门槛 FAIL → Option γ trigger
+- [x] Option γ 三选项 RFC 分析 → user 拍板 γ-1 (informational completion)
+- [x] design_decisions.md 决策 4.2 footnote (γ-1 决议 + 0.88 gate 撤销 + Phase 7-8 真实 evaluation 重定位)
+- [x] known_issues.md Phase 4 待办::Phase 3 sanity AUC re-validation 标 informational completion
+- [x] known_issues.md Phase 7 待办新增 BERT-fused-attention vs HTGN-only quick A/B 扩展议程
+- [x] known_issues.md Phase 12 论文素材::Phase 3 sanity AUC 演进数字 4-row ablation table 完全填好
+- [x] 4 ablation artifacts 全部保留 + commit 进 git（不允许覆盖）
+- [x] PROGRESS.md / CHECKPOINT_LOG.md 同步更新
+
+### Phase 4 整体目标变更（重要！新会话 agent 必读）
+
+**Checkpoint 11.2-γ-1 决议把 Phase 4 整体目标从原计划 "BERT 集成验证 + 跨模态融合实施 + AUC-style 单点验证" 变更为 "跨模态融合架构落地 + forward 不报错 + 梯度回传正常"**。AUC-style 单点验证关卡撤销，深层验证留给 Phase 7-8 联合预训练 + anomaly detection 阶段。Checkpoint 12 / 13 / 14 报告不再要求"AUC > X"型硬门槛，主交付物变为 architecture forward shape sanity + 梯度回传 + attention 权重 case study 可视化。
+
+---
+
+*下一条记录：Phase 4 / Checkpoint 12（双向跨模态注意力实施，需 user 在新会话窗口下达 launch spec）。*

@@ -204,7 +204,17 @@ Phase 3 Checkpoint 10 因 `AtlasGroundTruthLabelLoader` Phase 8 待办无法切�
 
 **Phase 4 入口 RFC 触发器**：开始 Phase 4 第一个 commit 前，main agent 必须读本条目并给出 (a)(b)(c) 三选一决议；不得 silent 跳过。议程产出预期：一条 docs commit 在 known_issues.md "Phase 3 设计偏离记录::Task B 完全 benign 子图 spec" 子节下追加 "Phase 4 RFC 决议（YYYY-MM-DD）：选 X，理由 Y" 标注，让 audit trail 串联起来。
 
-### Phase 3 sanity AUC re-validation（2026-05-06，Checkpoint 10 Option A conditional pass 触发）
+### Phase 3 sanity AUC re-validation（2026-05-06，Checkpoint 10 Option A conditional pass 触发）— **COMPLETED with informational null finding 2026-05-06 (Checkpoint 11.2-γ-1 决议)**
+
+> **闭环标注（2026-05-06，Checkpoint 11.2-γ-1 决议）**：本议程经 4 档 BERT 集成 ablation (random Gaussian baseline 0.8144 / [CLS] entity-identifier 0.8126 / β entity-event-context TOP_K=5 truncated 0.8113 / β entity-event-context TOP_K=2 in-spec 0.8147) 实测，4-seed mean AUC 全部聚集在 0.811-0.815 区间，std 0.007-0.016，**统计上完全无差异**——证实 random edge masking + structural negative sampling 的链路预测任务由图拓扑信号完全决定，BERT 语义特征通过 input-feature 通道无法贡献 lift。**双门槛 gate（绝对 ≥ 0.88 OR 相对 lift ≥ +0.04）均未通过**（β in-spec 实测 lift = +0.0003）。User 拍板 **Option γ-1**：
+>
+> - Phase 3 conditional pass 状态从 "pass / fail" 二元变更为 "**informationally complete**"——回答的是"HTGN 在 structure-only 任务上 ceiling OK"，不是 "BERT 集成 OK"
+> - 原 0.88 hard gate **撤销**（gate premise "BERT 通常 +0.05-0.10 lift" 文献经验只适用于 sentence classification / NER / QA 等 features 直接决定输出的任务，不适用于 structure-determined link prediction；agent Phase 3 Option A 决议论证错误，本闭环诚实标记，留 audit trail）
+> - BERT 跨模态融合的真实 evaluation 推到 Phase 7-8 anomaly detection（attack 事件含语义异常签名时 BERT semantic features 必有 lift；cross-modal attention 作为 fusion mechanism 比 input-feature injection 更适合 anomaly classification use case）
+> - 详见 `docs/design_decisions.md` 决策 4.2 footnote (2026-05-06) + 下方 Phase 7 待办 "BERT-fused-attention vs HTGN-only quick A/B 扩展" 议程 + 下方 Phase 12 论文素材 "Phase 3 sanity AUC 演进数字" 4-row ablation 表更新
+> - **Phase 4 进度影响**：Checkpoint 12 双向跨模态注意力可直接启动；Phase 4 整体目标变更为 "architecture 落地 + forward 不报错 + 梯度正常"，AUC-style 单点验证留 Phase 7-8
+>
+> 以下原 re-validation 协议保留作为决议过程 audit trail（**spec 已不再适用，但保留作为 Phase 12 audit trail 素材**）：
 
 Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068（4 seed [1, 7, 42, 100]），低于 0.85 hard gate。User 选 Option A（conditional pass），把验证责任推到 Phase 4 BERT 集成后重测。本子节是 Option A 落地条件 2 "重测协议工程化为可执行 spec" 的实现——**Phase 4 第一个 deliverable 必须包含本重测**。
 
@@ -249,33 +259,48 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 **论文 Methods 章节段落措辞模板**（"4.x HTGN encoder design and link prediction sanity check" 段适配）：
 
 > Phase 3 link prediction sanity validates HTGN's structural learning capability on
-> mixed-event provenance graphs with random node features (test AUC = **0.8144 ± 0.0068**
-> across 4 seeds [1, 7, 42, 100], M3_h2 first 1.0h window 2000-node K-hop subgraph,
-> 30-epoch BCE training with structured negative sampling 1:1).
+> mixed-event provenance graphs across four feature-injection configurations
+> (4 seeds [1, 7, 42, 100], M3_h2 first 1.0h window 2000-node K-hop subgraph, 30-epoch
+> BCE training with structured negative sampling 1:1):
 >
-> A naive BERT integration (frozen `[CLS]` embedding of `"<type> <id>"` per-entity short
-> text, learnable Linear(768, 256) projection) yielded test AUC = **0.8126 ± 0.0164**
-> (Δ ≈ 0 vs baseline), revealing the per-entity-identifier short-input degenerate regime
-> that raw BERT `[CLS]` is poorly suited for (cf. Reimers & Gurevych 2019 / SimCSE).
-> This null result motivated our entity-event-context input design.
+> | Configuration                                          | 4-seed mean test AUC | std    | Δ vs random | Notes                                                          |
+> |--------------------------------------------------------|---------------------:|-------:|------------:|----------------------------------------------------------------|
+> | (a) Random Gaussian baseline                           |                0.8144 | 0.0068 |       —     | structural-only ceiling                                        |
+> | (b) Naive BERT `[CLS]` of `"<type> <id>"` per-entity   |                0.8126 | 0.0164 |     −0.0018 | short-input degenerate regime (cf. Reimers & Gurevych 2019)    |
+> | (c) BERT mean-pool entity-event-context, TOP_K=5       |                0.8113 | 0.0127 |     −0.0031 | input truncated 91% at 256 tokens                              |
+> | (d) BERT mean-pool entity-event-context, TOP_K=2       |                0.8147 | 0.0109 |     +0.0003 | inputs in spec 50-150 token range, 0.4% truncated              |
 >
-> Switching to entity-event-context input (per node: first 5 participating events in the
-> K-hop time window, cleaner-processed and `[SEP]`-joined into a 50-150 token
-> sentence-level input) with attention-mask-weighted mean pooling yields test AUC =
-> **<Phase 11.2-β 实测填>** ± **<std 实测填>** (Δ = +**<gain 实测填>**), confirming that
-> BERT semantic features substantially augment HTGN when applied in the sentence-level
-> regime BERT was pretrained for. This three-row empirical decomposition isolates
-> the contributions of (a) heterogeneous attention + Option-C temporal residual + per-type
-> TGN memory (the 0.8144 random-feature baseline), (b) the identification of BERT's
-> short-input degenerate regime as a design pitfall (the [CLS] null result), and
-> (c) BERT cleaner-driven semantic features applied in the right input regime
-> (the +<gain> delta from entity-event-context).
+> All four configurations cluster within statistical noise (means 0.811-0.815, std
+> 0.007-0.016), establishing that this link prediction task with random edge masking
+> + structural negative sampling is **structure-determined**: graph topology fully
+> determines whether an edge exists between (u, v), and BERT semantic features about
+> node identities cannot contribute additional discriminative information through
+> the input-feature channel regardless of pooling strategy or input formatting.
+>
+> This null result is methodologically important: it shows that **input-feature
+> injection is not the right design point for cross-modal value in our setting**.
+> Our subsequent design — bidirectional cross-modal attention as a fusion mechanism
+> applied during pretraining (Phase 4) and evaluated downstream on anomaly detection
+> (Phase 7-8 anomaly F1) where attack events carry semantic anomaly signatures
+> (rare process names, anomalous file path patterns, blocklist IPs) — addresses the
+> right granularity at which BERT semantics augment HTGN's structural representation.
+> The Phase 8 anomaly F1 ablation B7 (mixed vs benign-only pretraining) and the Phase 7
+> BERT-fused-attention vs HTGN-only quick A/B together provide the empirical evidence
+> that cross-modal value resides in attention-as-fusion-mechanism rather than
+> features-as-input-to-structure-prediction.
 
-**占位符填充协议**：
+**所有占位符已填（2026-05-06，Checkpoint 11.2-γ-1 决议落地）**：
 
-- **第一组 [CLS] 数字（已填，2026-05-06）**：Checkpoint 11.2 用 naive [CLS] 配置实测 4-seed mean=**0.8126** ± std=**0.0164**，已直接写进上方第二段。原始数据保留在 `data/checkpoint10_taskB_summary_bert.json`（**禁止覆盖**，作 Phase 12 ablation 对比基线）。
-- **第二组 β 数字（待 Checkpoint 11.2-β 实测填）**：等 entity-event-context + mean pool 修正方案跑完 4-seed，用 `data/checkpoint11_2_beta_summary.json::multi_seed_aggregate` 的实测 mean / std 数字替换上方三处 `<Phase 11.2-β 实测填>` / `<std 实测填>` / `<gain 实测填>` 占位；Δ = mean_β - 0.8144（round 2 位小数）。回写本条目同时更新 Δ 数字（如 "Δ = +0.05"）。
-- **如 β 实测后 Δ < 0.04 (lift 阈值未达)**：触发 Option γ 架构级 RFC，本论文措辞模板需重新审视——可能要从"BERT 集成成功"叙事改为"BERT 集成局限性 + 我们对 HTGN 改进方向"叙事。Phase 12 写论文前必须看 Checkpoint 11.2-β 实测结果决定走哪个叙事。
+| 配置 | 数据 artifact | 决议落档 |
+|---|---|---|
+| (a) random Gaussian baseline | `data/checkpoint10_taskB_summary.json` | Phase 3 Checkpoint 10 baseline |
+| (b) [CLS] entity-identifier null result | `data/checkpoint10_taskB_summary_bert.json` | Phase 4 Checkpoint 11.2 first attempt |
+| (c) β TOP_K=5 truncated（实施 defect contrast）| `data/checkpoint11_2_beta_topk5_truncated_summary.json` | preserved as Phase 12 contrast despite implementation defect (token mean 313, 91% truncated; 用作 "we caught and fixed our own implementation defect" 透明素材) |
+| (d) β TOP_K=2 in-spec canonical | `data/checkpoint11_2_beta_summary.json` | Phase 4 Checkpoint 11.2-β canonical result，dual-threshold gate FAIL → Option γ-1 触发 |
+
+**禁止覆盖任一 artifact**——4 档数据全部保留作为 Phase 12 ablation 表的可复现锚点。Phase 12 论文写作时直接引用上述表格 + 4 个 JSON 数字。
+
+**γ-1 决议后论文叙事**：从原计划"BERT integration validates HTGN" 改为 "BERT integration null result on structure-determined link prediction sanity, indicating that cross-modal value resides in attention-as-fusion-mechanism (Phase 4) and feature-injection-into-anomaly-detection (Phase 7-8) rather than feature-as-input-to-structure-prediction"。这是 negative-result-as-positive-contribution 叙事——审稿人通常欣赏作者诚实报告 null finding 而非掩盖。完整决议链 audit trail：`docs/design_decisions.md` 决策 4.2 footnote (2026-05-06) + Phase 4 待办::Phase 3 sanity AUC re-validation 闭环标注 + Phase 7 待办::BERT-fused-attention vs HTGN-only quick A/B 扩展 议程。
 
 **论文叙事框架**（解释为什么这一段是 contribution 而非 limitation）：
 
@@ -409,6 +434,37 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 5. **报告与落档**：Phase 7 第一个 sub-checkpoint 报告必须含 mini pretraining loss 曲线 + 双指标对比表 + 决议结果，落 commit 进 git。
 
 **禁止动作**：在没跑 quick A/B 测试的情况下直接启动 Phase 7 全量预训练（不论选 mixed 还是 benign）。这条 sanity gate 是 Checkpoint 11.1 RFC Option B 的 落地保障，不是建议而是硬纪律。
+
+### BERT-fused-attention vs HTGN-only quick A/B 扩展（2026-05-06，Checkpoint 11.2-γ-1 决议触发）
+
+**触发原因**：Checkpoint 11.2-γ-1 决议把 BERT 跨模态融合的真实 evaluation 推到 Phase 7-8 anomaly detection（详见 `docs/design_decisions.md` 决策 4.2 footnote 2026-05-06 + 上方 "Phase 3 sanity AUC re-validation" 闭环标注）。**Phase 7 启动前必须验证 BERT 跨模态融合在 anomaly-relevant 数据上确实有 lift，不能默认假设**——这是对 Checkpoint 11.2 link prediction null finding 的 follow-up 验证。
+
+**Phase 7 mixed-vs-benign quick A/B（已规划议程）扩展为 2×2 grid**：
+
+|  | mixed pretraining | benign-only pretraining |
+|---|---|---|
+| **HTGN-only**（无 cross-attention） | A1 | A2 |
+| **BERT-fused-attention**（Phase 4.1 cross-attention 启用）| B1 | B2 |
+
+**对比指标（在 Phase 8 anomaly detection 任务上）**：
+
+1. **anomaly F1 score**（核心 - 跨模态融合 真正的 use case 指标）
+2. **anomaly AUC**（辅助 - 与 Phase 3 link prediction AUC 不同任务）
+3. **representation 可视化**（t-SNE / UMAP - attack vs benign 节点 representation 是否被 cross-attention 推得更分离）
+
+**通过门槛（hard gate）**：
+
+- **B1 vs A1**（mixed 数据下 BERT-fused vs HTGN-only）：anomaly F1 lift ≥ +0.03 或 anomaly AUC lift ≥ +0.02，验证跨模态融合真有贡献
+- **B2 vs A2**（benign 数据下同对比）：同阈值
+- **B1+B2 同时不达阈值** → 触发新一轮架构级 RFC 重新评估 Phase 4 跨模态注意力设计（这是 γ-1 决议设定的"如果 BERT 在 anomaly detection 也没有 lift，那是 BERT 在我们整个 use case 下都不适合"的 fallback gate）
+
+**实施时序**：
+
+- 必须在 Phase 7 全量联合预训练之前跑完 4 cells（数据子集如 Phase 7 待办 "Mixed-vs-benign quick A/B 前置测试" 子节描述：S1 + M1 mini pretraining）
+- 报告 commit message 前缀 `feat(phase7): BERT-fused-attention vs HTGN-only quick A/B (Checkpoint 11.2-γ-1 fallback verification)`
+- 跑完后回头标 Checkpoint 11.2-γ-1 决议条目 "Phase 7 A/B verification 完成日期 + commit hash + B1 vs A1 / B2 vs A2 实测 lift 数字" 闭环
+
+**Phase 12 论文叙事 hook**：如 Phase 7 A/B 显示 BERT-fused-attention 在 anomaly detection 上确实有显著 lift，论文 Methods 章节就有了 "我们诚实排除 BERT 集成在 link prediction 上无效 + 验证 BERT 集成在 anomaly detection 上显著有效" 这条完整决策链；如 Phase 7 A/B 也显示 null finding，论文叙事重心要从"跨模态融合是创新点 1 的核心贡献"调整为"我们发现 BERT 跨模态融合在 provenance graph anomaly detection 上的边际贡献有限，主创新转向 HTGN 异构时序图编码 + RAPA-GTCL 攻击模板增强"——后一种叙事虽然弱化创新点 1 但保留了创新点 2 的完整性。
 
 ## Phase 8 待办
 

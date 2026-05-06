@@ -66,19 +66,41 @@ Workarounds in this script (NOT to be confused with metric tweaks)
   in TGN memory contributions but HGT main path (85% of params) still
   dominates -- AUC measurement remains valid for Phase 3 sanity.
 
-Phase 4 re-validation hook (--use-bert-features stub)
-=====================================================
-The ``--use-bert-features`` CLI flag is a deliberate stub: in Phase 3
-node features are still random ``torch.randn(...)`` tensors. Phase 4
-will replace those with frozen ``bert-base-uncased`` ``[CLS]`` embeddings
-of the per-node textual context, then re-run this exact link-prediction
-sanity check to verify the Phase 3 borderline AUC (~0.82) lifts above
-the 0.85 hard gate once semantic features are present. Until that
-implementation lands, passing ``--use-bert-features`` raises
-``NotImplementedError`` pointing the operator at
-``docs/known_issues.md::Phase 4 待办::Phase 3 sanity AUC re-validation``.
-This stub exists so the Phase 4 re-test invocation is discoverable from
-the script's ``--help`` output rather than buried in a doc.
+Phase 4 re-validation hook (--use-bert-features)
+================================================
+The ``--use-bert-features`` CLI flag activates Phase 4 / Checkpoint 11.2
+BERT feature integration on the same protocol (M3_h2 first 1.0h window,
+khop=3, max-degree process seed, 1:1 structured negatives, 7:1.5:1.5
+split, 30 epochs, Adam lr=1e-3, seed list [1, 7, 42, 100]). Hard gate
+``mean test_auc >= 0.88`` per docs/known_issues.md::Phase 4 待办::Phase
+3 sanity AUC re-validation. Below that triggers RFC; do NOT bypass.
+
+Implementation choices (documented per Checkpoint 11.2 spec):
+
+* **Per-node text format**: ``f"{node_type} {node_id_string}"`` (e.g.
+  ``"process powershell.exe"``, ``"file C:\\Windows\\notepad.exe"``,
+  ``"network 192.168.1.1"``, ``"user Administrator"``,
+  ``"socket 192.168.1.5:443"``). The simple format leverages BERT's
+  pretrained tokenizer + 156 LogHetero special tokens. The Phase 2 log
+  cleaner is NOT applied because it is designed for full log lines, not
+  single identifiers; per-node identifiers are already short.
+* **BERT pooling**: ``[CLS]`` token from frozen ``bert-base-uncased``
+  (``mode="frozen"``). Phase 4 main fusion will explore other modes; this
+  re-test isolates the frozen-BERT effect for clean comparison with the
+  Phase 3 baseline (0.8144 mean).
+* **Cache strategy**: BERT features are computed once per subgraph (the
+  subgraph is deterministic across seeds because we pick the max-degree
+  process node), then re-used across epochs and seeds. BERT forward is
+  not in the training loop.
+* **Dimension projection**: a single shared learnable
+  ``nn.Linear(768, 256)`` projects BERT 768-d ``[CLS]`` to HTGN's
+  ``HIDDEN_DIM=256`` for ALL node types. Shared (rather than per-type)
+  is preferred because (a) ~200K params instead of ~1M; (b) the node
+  type information is already in the BERT input prefix, so the
+  projection does not need to disambiguate types; (c) keeps the BERT
+  re-test cleanly comparable to the Phase 3 random-Gaussian baseline
+  in terms of trainable head capacity. Added to the optimizer alongside
+  HTGN + MLP head.
 """
 
 from __future__ import annotations
@@ -102,6 +124,7 @@ from loghetero.data.parsers.atlas import DnsParser, FirefoxParser, SecurityEvent
 from loghetero.data.parsers.base import NodeType
 from loghetero.data.provenance_graph import build_graph
 from loghetero.data.subgraph_sampler import SeedNode, sample_khop_subgraph
+from loghetero.models.encoders.bert_text import build_bert_text_encoder, encode_texts
 from loghetero.models.graph.htgn import HTGN
 
 # --- Constants (from launch spec; do NOT modify) ----------------------------
@@ -133,6 +156,31 @@ LR = 1e-3
 
 AUC_HARD_GATE = 0.85
 AUC_BORDERLINE_LOW = 0.80
+
+# BERT re-test (Checkpoint 11.2) constants. Hard gate is the higher 0.88
+# threshold per known_issues.md::Phase 4 待办::Phase 3 sanity AUC
+# re-validation; BERT features must lift mean test AUC by >= 0.07 above the
+# Phase 3 random-feature baseline (0.8144) to validate semantic-feature
+# contribution.
+BERT_HARD_GATE_MEAN = 0.88
+BERT_HARD_GATE_LIFT = 0.04  # Checkpoint 11.2-β dual-threshold (per Phase 4
+# RFC after [CLS] failed); pass = (mean >= BERT_HARD_GATE_MEAN) OR
+# (mean - 0.8144 >= BERT_HARD_GATE_LIFT). Floor of "features typically
+# add +0.05-0.10" empirical range; below +0.04 means BERT integration
+# is essentially ineffective regardless of absolute number.
+BERT_HIDDEN = 768
+BERT_BATCH = 64  # batch size for BERT [CLS] extraction
+BERT_MAX_LENGTH_ENTITY = 128  # entity_identifier mode (Checkpoint 11.2 [CLS])
+BERT_MAX_LENGTH_CONTEXT = 192  # entity_event_context mode; with TOP_K=2 each
+# event ~60 tokens + [SEP] -> ~125 tokens mean, 192 ceiling absorbs p99 with
+# headroom while keeping inputs in the 50-150 sentence-level spec target.
+BERT_CONTEXT_TOP_K = 2  # entity_event_context: take first 2 events / node.
+# TOP_K=5 (initial choice from launch spec) produced 313-token mean (90.95%
+# truncated at 256, only 1.35% in [50, 150] range) because each event_to_text
+# output is itself a 50-60 token sentence-level rendering with cleaner-applied
+# placeholders + all event attributes. TOP_K=2 brings mean into ~110-130
+# token range, fitting the 50-150 spec target.
+PHASE3_BASELINE_MEAN = 0.8144  # canonical Phase 3 random-feature baseline
 
 
 # --- Data pipeline ----------------------------------------------------------
@@ -385,6 +433,199 @@ class LinkPredictorHead(nn.Module):
         return self.fc(torch.cat([emb_u, emb_v], dim=-1)).squeeze(-1)
 
 
+# --- BERT feature path (Checkpoint 11.2) ------------------------------------
+
+
+def _build_node_texts_entity_identifier(
+    sub, n_per_type: dict[NodeType, int]
+) -> dict[str, list[str]]:
+    """Construct ``f"{node_type} {node_id}"`` strings per node type.
+
+    This is the Checkpoint 11.2 [CLS] mode (failed null-result baseline,
+    preserved as Phase 12 ablation contrast). Short input (~2-6 token) puts
+    BERT outside its sentence-level pretraining regime; the [CLS] embedding
+    on such short input is isotropic-degenerate per SimCSE / BERT-flow
+    findings. Use ``entity_event_context`` mode for the corrected β path.
+    """
+    texts_per_type: dict[str, list[str]] = {}
+    for nt in NodeType:
+        if n_per_type[nt] == 0:
+            continue
+        ntype_str = nt.value
+        ids = sub[ntype_str].node_id
+        texts_per_type[ntype_str] = [f"{ntype_str} {ids[i]}" for i in range(n_per_type[nt])]
+    return texts_per_type
+
+
+def _build_node_event_index(
+    window_events: list, sub, n_per_type: dict[NodeType, int]
+) -> dict[str, list[list]]:
+    """Map each subgraph node to its time-sorted list of participating Events.
+
+    For each (ntype, node_id_str) in the K-hop subgraph, find every Event in
+    the window where the node appears as subject or object. Sort by
+    timestamp_ns ascending. Return ``{ntype_str: [events_for_node_0,
+    events_for_node_1, ...]}`` aligned to ``sub[ntype_str].node_id`` order.
+    """
+    # Build (ntype_str, identifier_str) -> list[Event]
+    by_node: dict[tuple[str, str], list] = {}
+    for ev in window_events:
+        for side_type, side_id in (
+            (ev.subject_type.value, ev.subject),
+            (ev.obj_type.value, ev.obj),
+        ):
+            by_node.setdefault((side_type, side_id), []).append(ev)
+    # Materialise per-node event lists, time-sorted.
+    out: dict[str, list[list]] = {}
+    for nt in NodeType:
+        if n_per_type[nt] == 0:
+            continue
+        ntype_str = nt.value
+        ids = sub[ntype_str].node_id
+        per_node: list[list] = []
+        for nid in ids:
+            evs = by_node.get((ntype_str, nid), [])
+            per_node.append(sorted(evs, key=lambda e: e.timestamp_ns))
+        out[ntype_str] = per_node
+    return out
+
+
+def _build_node_texts_entity_event_context(
+    sub,
+    n_per_type: dict[NodeType, int],
+    node_event_index: dict[str, list[list]],
+) -> tuple[dict[str, list[str]], dict[str, int]]:
+    """Construct entity-event-context texts per node (Checkpoint 11.2-β mode).
+
+    Per node: take the first ``BERT_CONTEXT_TOP_K`` participating events
+    (time-sorted), render each via Phase 1 ``event_to_text`` (cleaner +
+    placeholder normalisation), join with `` [SEP] `` to form a single
+    sentence-level input that lands in BERT's pretrained regime
+    (~50-150 token target).
+
+    Returns ``(texts_per_type, fallback_counts_per_type)``. The fallback
+    count tracks nodes with 0 events in the window (graceful identifier
+    fallback per launch spec); should be 0 by K-hop subgraph construction
+    but logged for known_issues.md if observed.
+    """
+    from loghetero.data.datamodule import event_to_text
+
+    texts_per_type: dict[str, list[str]] = {}
+    fallback_counts: dict[str, int] = {}
+    for nt in NodeType:
+        if n_per_type[nt] == 0:
+            continue
+        ntype_str = nt.value
+        ids = sub[ntype_str].node_id
+        per_node_events = node_event_index[ntype_str]
+        texts: list[str] = []
+        n_fallback = 0
+        for idx, events in enumerate(per_node_events):
+            if not events:
+                # Graceful fallback (launch spec): per-entity identifier
+                texts.append(f"{ntype_str} {ids[idx]}")
+                n_fallback += 1
+                continue
+            top_events = events[:BERT_CONTEXT_TOP_K]
+            event_texts = [event_to_text(ev) for ev in top_events]
+            texts.append(" [SEP] ".join(event_texts))
+        texts_per_type[ntype_str] = texts
+        fallback_counts[ntype_str] = n_fallback
+    return texts_per_type, fallback_counts
+
+
+def _compute_bert_features(
+    sub,
+    n_per_type: dict[NodeType, int],
+    bert_model,
+    tokenizer,
+    device: torch.device,
+    *,
+    context_mode: str = "entity_event_context",
+    pooling: str = "mean",
+    window_events: list | None = None,
+) -> tuple[dict[str, torch.Tensor], dict]:
+    """Encode every per-node text via frozen BERT and return pooled features.
+
+    Returns ``(features_dict, diagnostics_dict)``:
+        * ``features_dict``: ``{ntype_str: Tensor(n_nodes, 768)}`` on ``device``
+        * ``diagnostics_dict``: per-mode metadata for the summary JSON, including
+          per-type fallback counts (β path) and token-length distribution stats
+          (post-tokenizer, before truncation) for verification that
+          entity-event-context inputs land in the 50-150 token target range.
+
+    Cached by the caller across epochs and across seeds (subgraph and event
+    index are deterministic under max-degree seed selection).
+    """
+    if context_mode not in {"entity_identifier", "entity_event_context"}:
+        raise ValueError(f"unknown context_mode: {context_mode!r}")
+    if pooling not in {"cls", "mean"}:
+        raise ValueError(f"unknown pooling: {pooling!r}")
+
+    diagnostics: dict = {"context_mode": context_mode, "pooling": pooling}
+    if context_mode == "entity_identifier":
+        texts_per_type = _build_node_texts_entity_identifier(sub, n_per_type)
+        max_length = BERT_MAX_LENGTH_ENTITY
+        diagnostics["fallback_counts_per_type"] = None
+    else:
+        if window_events is None:
+            raise ValueError("entity_event_context mode requires window_events")
+        node_event_index = _build_node_event_index(window_events, sub, n_per_type)
+        texts_per_type, fallback_counts = _build_node_texts_entity_event_context(
+            sub, n_per_type, node_event_index
+        )
+        max_length = BERT_MAX_LENGTH_CONTEXT
+        diagnostics["fallback_counts_per_type"] = fallback_counts
+
+    # Token-length distribution (post-tokenizer, pre-truncation), for the
+    # launch-spec verification that entity-event-context inputs really
+    # land in the 50-150 target range.
+    all_token_lengths: list[int] = []
+    for texts in texts_per_type.values():
+        for t in texts:
+            ids = tokenizer(t, truncation=False, padding=False)["input_ids"]
+            all_token_lengths.append(len(ids))
+    if all_token_lengths:
+        arr = np.asarray(all_token_lengths)
+        diagnostics["token_length_stats"] = {
+            "n": int(arr.size),
+            "min": int(arr.min()),
+            "max": int(arr.max()),
+            "mean": float(arr.mean()),
+            "p50": float(np.percentile(arr, 50)),
+            "p90": float(np.percentile(arr, 90)),
+            "p99": float(np.percentile(arr, 99)),
+            "fraction_in_50_150": float(((arr >= 50) & (arr <= 150)).mean()),
+            "fraction_truncated": float((arr > max_length).mean()),
+        }
+
+    out: dict[str, torch.Tensor] = {}
+    for ntype_str, texts in texts_per_type.items():
+        chunks: list[torch.Tensor] = []
+        for start in range(0, len(texts), BERT_BATCH):
+            batch = texts[start : start + BERT_BATCH]
+            emb = encode_texts(bert_model, tokenizer, batch, pooling=pooling, max_length=max_length)
+            chunks.append(emb.detach())
+        out[ntype_str] = torch.cat(chunks, dim=0).to(device)
+    return out, diagnostics
+
+
+class BertFeatureProjection(nn.Module):
+    """Shared learnable Linear(768, 256) used for ALL node types.
+
+    Shared (vs per-type) is the documented default per Checkpoint 11.2
+    spec: simpler, fewer params, and node-type info is already encoded in
+    the BERT input prefix. Added to the optimizer alongside HTGN + MLP head.
+    """
+
+    def __init__(self, in_dim: int = BERT_HIDDEN, out_dim: int = HIDDEN_DIM) -> None:
+        super().__init__()
+        self.proj = nn.Linear(in_dim, out_dim)
+
+    def forward(self, bert_features: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        return {nt_str: self.proj(feat) for nt_str, feat in bert_features.items()}
+
+
 # --- Training loop ----------------------------------------------------------
 
 
@@ -454,19 +695,37 @@ def train_link_prediction(
     val,
     test,
     device: torch.device,
+    *,
+    bert_proj: BertFeatureProjection | None = None,
+    bert_features: dict[str, torch.Tensor] | None = None,
 ) -> dict:
-    """Train HTGN + head with BCE for EPOCHS epochs; return per-epoch metrics."""
+    """Train HTGN + head with BCE for EPOCHS epochs; return per-epoch metrics.
+
+    When ``bert_proj`` and ``bert_features`` are provided, ``x_dict`` is
+    re-built every forward pass via ``bert_proj(bert_features)`` so the
+    projection's gradients flow back. The provided ``x_dict`` argument is
+    ignored in that mode (reserved for the random-Gaussian Phase 3 path).
+    """
     train_pos, train_neg = train
     val_pos, val_neg = val
     test_pos, test_neg = test
 
-    optimizer = torch.optim.Adam(list(htgn.parameters()) + list(head.parameters()), lr=LR)
+    use_bert = bert_proj is not None and bert_features is not None
+    params: list[torch.nn.Parameter] = list(htgn.parameters()) + list(head.parameters())
+    if use_bert:
+        params = params + list(bert_proj.parameters())
+    optimizer = torch.optim.Adam(params, lr=LR)
     bce = nn.BCEWithLogitsLoss()
 
     loss_curve: list[float] = []
     train_auc_curve: list[float] = []
     val_auc_curve: list[float] = []
     test_auc_curve: list[float] = []
+
+    def _current_x_dict() -> dict[str, torch.Tensor]:
+        if use_bert:
+            return bert_proj(bert_features)
+        return x_dict
 
     for epoch in range(EPOCHS):
         # Train. detach() BEFORE reset_state() to actually clear stale
@@ -475,9 +734,12 @@ def train_link_prediction(
         # path will let us drop this defensive double-call.
         htgn.train()
         head.train()
+        if use_bert:
+            bert_proj.train()
         htgn.tgn_memory.detach()
         htgn.tgn_memory.reset_state()
-        out_dict = htgn(x_dict, context_ei, context_et)
+        train_x_dict = _current_x_dict()
+        out_dict = htgn(train_x_dict, context_ei, context_et)
 
         pos_logits = _gather_edge_logits(out_dict, head, train_pos)
         neg_logits = _gather_edge_logits(out_dict, head, train_neg)
@@ -495,12 +757,18 @@ def train_link_prediction(
         optimizer.step()
         htgn.tgn_memory.detach()
 
-        # Eval
+        # Eval -- re-projection inside _eval_auc's no_grad block is fine; the
+        # projection params are already updated for this epoch.
+        eval_x_dict = _current_x_dict() if use_bert else x_dict
         train_auc = _eval_auc(
-            htgn, head, x_dict, context_ei, context_et, train_pos, train_neg, device
+            htgn, head, eval_x_dict, context_ei, context_et, train_pos, train_neg, device
         )
-        val_auc = _eval_auc(htgn, head, x_dict, context_ei, context_et, val_pos, val_neg, device)
-        test_auc = _eval_auc(htgn, head, x_dict, context_ei, context_et, test_pos, test_neg, device)
+        val_auc = _eval_auc(
+            htgn, head, eval_x_dict, context_ei, context_et, val_pos, val_neg, device
+        )
+        test_auc = _eval_auc(
+            htgn, head, eval_x_dict, context_ei, context_et, test_pos, test_neg, device
+        )
 
         loss_curve.append(float(loss.item()))
         train_auc_curve.append(train_auc)
@@ -624,6 +892,14 @@ def _run_single_seed(
     device: torch.device,
     cached_events: list | None,
     seed_suffix: str,
+    use_bert: bool = False,
+    bert_model=None,
+    tokenizer=None,
+    cached_bert_features: dict[str, torch.Tensor] | None = None,
+    cached_bert_diagnostics: dict | None = None,
+    bert_context_mode: str = "entity_event_context",
+    bert_pooling: str = "mean",
+    png_prefix: str = "checkpoint10_taskB",
 ) -> dict:
     """Run the full Task B pipeline for one seed and return all artefacts.
 
@@ -633,6 +909,11 @@ def _run_single_seed(
 
     ``cached_events`` lets the multi-seed driver parse the M3_h2 logs once
     and reuse the result -- the parser output is independent of seed.
+
+    When ``use_bert=True``, ``bert_model``/``tokenizer`` are required and the
+    BERT [CLS] features are computed once for the (deterministic) subgraph
+    and cached via ``cached_bert_features`` across seeds. ``png_prefix``
+    distinguishes BERT-path output filenames from the random-path baseline.
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -640,10 +921,10 @@ def _run_single_seed(
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    loss_auc_png = out_dir / f"checkpoint10_taskB_loss_auc{seed_suffix}.png"
-    roc_png = out_dir / f"checkpoint10_taskB_roc{seed_suffix}.png"
+    loss_auc_png = out_dir / f"{png_prefix}_loss_auc{seed_suffix}.png"
+    roc_png = out_dir / f"{png_prefix}_roc{seed_suffix}.png"
 
-    print(f"[task_b] device={device}, seed={seed}")
+    print(f"[task_b] device={device}, seed={seed}, use_bert={use_bert}")
 
     # --- Data
     if cached_events is None:
@@ -671,28 +952,108 @@ def _run_single_seed(
     htgn = _build_htgn(metadata, n_per_type).to(device)
     head = LinkPredictorHead(HIDDEN_DIM).to(device)
 
-    x_dict = {
-        nt.value: torch.randn(n_per_type[nt], HIDDEN_DIM, device=device)
-        for nt in NodeType
-        if n_per_type[nt] > 0
-    }
+    bert_proj: BertFeatureProjection | None = None
+    bert_features: dict[str, torch.Tensor] | None = None
+    bert_diagnostics: dict | None = None
+    bert_proj_params = 0
+    if use_bert:
+        if bert_model is None or tokenizer is None:
+            raise RuntimeError("use_bert=True requires bert_model + tokenizer to be passed")
+        if cached_bert_features is None:
+            print(
+                f"[task_b] computing BERT features (mode={bert_context_mode}, "
+                f"pooling={bert_pooling}) for subgraph nodes ..."
+            )
+            t_bert = time.time()
+            bert_features, bert_diagnostics = _compute_bert_features(
+                sub,
+                n_per_type,
+                bert_model,
+                tokenizer,
+                device,
+                context_mode=bert_context_mode,
+                pooling=bert_pooling,
+                window_events=window_events,
+            )
+            print(
+                f"[task_b]   BERT feature extraction = {time.time() - t_bert:.1f}s; "
+                + ", ".join(f"{k}={v.shape}" for k, v in bert_features.items())
+            )
+            if "token_length_stats" in bert_diagnostics:
+                tls = bert_diagnostics["token_length_stats"]
+                print(
+                    f"[task_b]   token-length: n={tls['n']}, "
+                    f"min={tls['min']}, p50={tls['p50']:.0f}, "
+                    f"p99={tls['p99']:.0f}, max={tls['max']}, "
+                    f"in[50,150]={tls['fraction_in_50_150']:.1%}, "
+                    f"truncated={tls['fraction_truncated']:.1%}"
+                )
+            if bert_diagnostics.get("fallback_counts_per_type"):
+                fc = bert_diagnostics["fallback_counts_per_type"]
+                total_fb = sum(fc.values())
+                if total_fb > 0:
+                    print(
+                        f"[task_b]   WARNING: {total_fb} nodes had 0 events in window "
+                        f"and used identifier fallback: {fc}"
+                    )
+        else:
+            print(
+                f"[task_b] reusing cached BERT features (mode={bert_context_mode}, "
+                f"subgraph deterministic) ..."
+            )
+            bert_features = cached_bert_features
+            bert_diagnostics = cached_bert_diagnostics
+        bert_proj = BertFeatureProjection(BERT_HIDDEN, HIDDEN_DIM).to(device)
+        bert_proj_params = sum(p.numel() for p in bert_proj.parameters())
+        # The dummy x_dict is unused on the BERT path; train_link_prediction
+        # rebuilds via bert_proj(bert_features) each forward.
+        x_dict = {
+            nt.value: torch.zeros(n_per_type[nt], HIDDEN_DIM, device=device)
+            for nt in NodeType
+            if n_per_type[nt] > 0
+        }
+    else:
+        x_dict = {
+            nt.value: torch.randn(n_per_type[nt], HIDDEN_DIM, device=device)
+            for nt in NodeType
+            if n_per_type[nt] > 0
+        }
     context_ei_d = {k: v.to(device) for k, v in context_ei.items()}
     context_et_d = {k: v.to(device) for k, v in context_et.items()}
 
     htgn_params = htgn.parameter_breakdown()["total"]
     head_params = sum(p.numel() for p in head.parameters())
-    print(f"[task_b]   HTGN={htgn_params:,} params, MLP head={head_params:,} params")
+    print(
+        f"[task_b]   HTGN={htgn_params:,} params, MLP head={head_params:,} params"
+        + (f", BERT projection={bert_proj_params:,} params" if use_bert else "")
+    )
 
     # --- Train
     print(f"[task_b] training {EPOCHS} epochs ...")
     metrics = train_link_prediction(
-        htgn, head, x_dict, context_ei_d, context_et_d, train, val, test, device
+        htgn,
+        head,
+        x_dict,
+        context_ei_d,
+        context_et_d,
+        train,
+        val,
+        test,
+        device,
+        bert_proj=bert_proj,
+        bert_features=bert_features,
     )
 
-    # --- ROC + plots
+    # --- ROC + plots. For BERT path, we need to project once more inside the
+    # plot routine; build the final eval x_dict by calling bert_proj(features).
+    if use_bert:
+        with torch.no_grad():
+            final_x_dict = {nt: bert_proj.proj(feat) for nt, feat in bert_features.items()}
+    else:
+        final_x_dict = x_dict
     print("[task_b] generating ROC + loss/AUC plots ...")
     final_test_auc = _plot_roc(
-        htgn, head, x_dict, context_ei_d, context_et_d, test[0], test[1], device, roc_png
+        htgn, head, final_x_dict, context_ei_d, context_et_d, test[0], test[1], device, roc_png
     )
     _plot_loss_and_auc(metrics, loss_auc_png)
 
@@ -719,8 +1080,11 @@ def _run_single_seed(
         "gate_msg": gate_msg,
         "htgn_params": htgn_params,
         "head_params": head_params,
+        "bert_proj_params": bert_proj_params,
+        "bert_features": bert_features,  # for caching across seeds
         "loss_auc_png": loss_auc_png,
         "roc_png": roc_png,
+        "bert_diagnostics": bert_diagnostics,
     }
 
 
@@ -756,26 +1120,75 @@ def main() -> int:
         action="store_true",
         default=False,
         help=(
-            "[Phase 4 stub] Replace random node features with frozen "
-            "bert-base-uncased [CLS] embeddings; raises NotImplementedError "
-            "in Phase 3."
+            "[Phase 4 / Checkpoint 11.2] Replace random node features with "
+            "frozen bert-base-uncased embeddings + shared learnable "
+            "Linear(768, 256) projection. Default mode is entity_event_context "
+            "+ mean pooling (Checkpoint 11.2-β). Override via "
+            "--bert-context-mode + --bert-pooling for ablation."
+        ),
+    )
+    parser.add_argument(
+        "--bert-context-mode",
+        choices=["entity_identifier", "entity_event_context"],
+        default="entity_event_context",
+        help=(
+            "[Phase 4 / Checkpoint 11.2] BERT input construction mode. "
+            "entity_identifier = '<type> <id>' per node (Checkpoint 11.2 "
+            "[CLS] failed null-result baseline; preserved for Phase 12 "
+            "ablation contrast). entity_event_context = first 5 events "
+            "per node, cleaner-processed and [SEP]-joined into ~50-150 token "
+            "sentence-level input (Checkpoint 11.2-β corrected approach). "
+            "Default: entity_event_context."
+        ),
+    )
+    parser.add_argument(
+        "--bert-pooling",
+        choices=["cls", "mean"],
+        default="mean",
+        help=(
+            "[Phase 4 / Checkpoint 11.2] BERT pooling strategy. cls = [CLS] "
+            "token embedding (degenerate on short inputs per SimCSE / BERT-flow). "
+            "mean = attention-mask-weighted mean of token embeddings (more stable "
+            "without SimCSE-style contrastive pretraining). Default: mean."
         ),
     )
     args = parser.parse_args()
 
-    if args.use_bert_features:
-        raise NotImplementedError(
-            "--use-bert-features is the Phase 4 BERT integration re-test path; "
-            "not implemented in Phase 3 (this script). See "
-            "docs/known_issues.md::Phase 4 待办::Phase 3 sanity AUC re-validation "
-            "for the spec -- implement BERT cls embedding as node features here."
-        )
-
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = Path("data") / "checkpoint10_taskB_summary.json"
+    if args.use_bert_features:
+        # Distinct output paths per BERT mode so the failed [CLS] null-result
+        # baseline (Checkpoint 11.2) is preserved as Phase 12 ablation
+        # contrast and the β corrected approach (Checkpoint 11.2-β) writes
+        # to a fresh file rather than overwriting it.
+        if args.bert_context_mode == "entity_event_context" and args.bert_pooling == "mean":
+            summary_path = Path("data") / "checkpoint11_2_beta_summary.json"
+            png_prefix = "checkpoint11_2_beta"
+        elif args.bert_context_mode == "entity_identifier" and args.bert_pooling == "cls":
+            summary_path = Path("data") / "checkpoint10_taskB_summary_bert.json"
+            png_prefix = "checkpoint10_taskB_bert"
+        else:
+            # Generic ablation cell: distinct filename so it doesn't clobber
+            # the canonical [CLS] baseline or β corrected paths.
+            summary_path = (
+                Path("data")
+                / f"checkpoint11_2_{args.bert_context_mode}_{args.bert_pooling}_summary.json"
+            )
+            png_prefix = f"checkpoint11_2_{args.bert_context_mode}_{args.bert_pooling}"
+    else:
+        summary_path = Path("data") / "checkpoint10_taskB_summary.json"
+        png_prefix = "checkpoint10_taskB"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    bert_model = None
+    tokenizer = None
+    if args.use_bert_features:
+        print("[task_b] loading frozen bert-base-uncased + augmented tokenizer ...")
+        bert_model, tokenizer = build_bert_text_encoder(mode="frozen")
+        bert_model = bert_model.to(device)
+        bert_model.eval()
+        print(f"[task_b]   BERT vocab={len(tokenizer)} (expected 30,678)")
 
     workarounds = [
         "num_nodes_per_type[memory_types] = max(across-types) -- workaround "
@@ -795,6 +1208,8 @@ def main() -> int:
         t0 = time.time()
         per_seed_runs: list[dict] = []
         cached_events: list | None = None
+        cached_bert_features: dict[str, torch.Tensor] | None = None
+        cached_bert_diagnostics: dict | None = None
         for seed in seeds:
             run = _run_single_seed(
                 seed,
@@ -802,8 +1217,19 @@ def main() -> int:
                 device=device,
                 cached_events=cached_events,
                 seed_suffix=f"_seed{seed}",
+                use_bert=args.use_bert_features,
+                bert_model=bert_model,
+                tokenizer=tokenizer,
+                cached_bert_features=cached_bert_features,
+                cached_bert_diagnostics=cached_bert_diagnostics,
+                bert_context_mode=args.bert_context_mode,
+                bert_pooling=args.bert_pooling,
+                png_prefix=png_prefix,
             )
             cached_events = run["events"]  # reuse across seeds (parser is seed-independent)
+            if args.use_bert_features and cached_bert_features is None:
+                cached_bert_features = run["bert_features"]
+                cached_bert_diagnostics = run.get("bert_diagnostics")
             per_seed_runs.append(run)
         wall = time.time() - t0
 
@@ -835,6 +1261,93 @@ def main() -> int:
         ref_negatives = ref["negatives"]
         ref_train, ref_val, ref_test = ref["train"], ref["val"], ref["test"]
 
+        if args.use_bert_features:
+            mean_auc = float(test_aucs_arr.mean())
+            delta_vs_baseline = mean_auc - PHASE3_BASELINE_MEAN
+            # Dual-threshold gate (Checkpoint 11.2-β user RFC, after [CLS]
+            # null result disproved the original 0.88-only gate's premise):
+            # pass = (absolute mean >= BERT_HARD_GATE_MEAN) OR
+            #        (lift >= BERT_HARD_GATE_LIFT vs Phase 3 baseline 0.8144).
+            absolute_pass = mean_auc >= BERT_HARD_GATE_MEAN
+            lift_pass = delta_vs_baseline >= BERT_HARD_GATE_LIFT
+            if absolute_pass and lift_pass:
+                bert_gate_status = "PASS_BOTH"
+                bert_gate_msg = (
+                    f"PASS (both): mean {mean_auc:.4f} >= {BERT_HARD_GATE_MEAN} "
+                    f"AND lift {delta_vs_baseline:+.4f} >= +{BERT_HARD_GATE_LIFT}"
+                )
+            elif absolute_pass:
+                bert_gate_status = "PASS_ABSOLUTE_ONLY"
+                bert_gate_msg = (
+                    f"PASS (absolute only): mean {mean_auc:.4f} >= "
+                    f"{BERT_HARD_GATE_MEAN}; lift {delta_vs_baseline:+.4f} "
+                    f"< +{BERT_HARD_GATE_LIFT}"
+                )
+            elif lift_pass:
+                bert_gate_status = "PASS_LIFT_ONLY"
+                bert_gate_msg = (
+                    f"PASS (lift only): lift {delta_vs_baseline:+.4f} >= "
+                    f"+{BERT_HARD_GATE_LIFT}; mean {mean_auc:.4f} < "
+                    f"{BERT_HARD_GATE_MEAN}; advance with HTGN-capacity added "
+                    f"to next-phase investigation queue"
+                )
+            else:
+                bert_gate_status = "FAIL"
+                bert_gate_msg = (
+                    f"FAIL: neither gate passes (mean {mean_auc:.4f} < "
+                    f"{BERT_HARD_GATE_MEAN} AND lift {delta_vs_baseline:+.4f} "
+                    f"< +{BERT_HARD_GATE_LIFT}); trigger Option gamma "
+                    f"architectural RFC per known_issues.md::Phase 4 待办"
+                )
+            multi_seed_aggregate = {
+                "n_seeds": len(seeds),
+                "seeds_used": seeds,
+                "test_auc_mean": mean_auc,
+                "test_auc_std": float(test_aucs_arr.std(ddof=0)),
+                "test_auc_min": float(test_aucs_arr.min()),
+                "test_auc_max": float(test_aucs_arr.max()),
+                "hard_gate_status": bert_gate_status,
+                "hard_gate_threshold_absolute": BERT_HARD_GATE_MEAN,
+                "hard_gate_threshold_lift": BERT_HARD_GATE_LIFT,
+                "hard_gate_absolute_pass": absolute_pass,
+                "hard_gate_lift_pass": lift_pass,
+                "hard_gate_message": bert_gate_msg,
+                "phase3_baseline_test_auc_mean": PHASE3_BASELINE_MEAN,
+                "delta_vs_phase3_baseline": delta_vs_baseline,
+                "bert_context_mode": args.bert_context_mode,
+                "bert_pooling": args.bert_pooling,
+                "auc_interpretation": (
+                    f"validates HTGN's structural learning capability on "
+                    f"mixed-event provenance graphs with BERT node features "
+                    f"(mode={args.bert_context_mode}, pooling={args.bert_pooling}); "
+                    f"Phase 4 / Checkpoint 11.2 re-test of the Phase 3 conditional "
+                    f"pass per known_issues.md::Phase 4 待办::Phase 3 sanity AUC "
+                    f"re-validation; dual-threshold gate per Checkpoint 11.2-β user RFC"
+                ),
+            }
+            # Attach BERT diagnostics (token length distribution + fallback
+            # counts) for spec verification + Phase 12 paper material.
+            if per_seed_runs and per_seed_runs[0].get("bert_diagnostics"):
+                multi_seed_aggregate["bert_diagnostics"] = per_seed_runs[0]["bert_diagnostics"]
+        else:
+            multi_seed_aggregate = {
+                "n_seeds": len(seeds),
+                "seeds_used": seeds,
+                "test_auc_mean": float(test_aucs_arr.mean()),
+                "test_auc_std": float(test_aucs_arr.std(ddof=0)),
+                "test_auc_min": float(test_aucs_arr.min()),
+                "test_auc_max": float(test_aucs_arr.max()),
+                "hard_gate_status": "BORDERLINE_CONDITIONAL_PASS",
+                "hard_gate_threshold": AUC_HARD_GATE,
+                "hard_gate_borderline_low": AUC_BORDERLINE_LOW,
+                "auc_interpretation": (
+                    "validates HTGN's structural learning capability on "
+                    "mixed-event provenance graphs; AUC ceiling reflects absent "
+                    "BERT semantic features (Phase 3 stage), Phase 4 re-test "
+                    "required per known_issues.md::Phase 4 待办"
+                ),
+            }
+
         summary = {
             "spec": {
                 "scenario": SCENARIO,
@@ -855,6 +1368,11 @@ def main() -> int:
                     "known_issues.md"
                 ),
             },
+            "feature_source": (
+                "bert_cls_frozen_with_shared_learnable_projection"
+                if args.use_bert_features
+                else "random_gaussian"
+            ),
             "subgraph_summary": {
                 "nodes_per_type": {nt.value: ref_n_per_type[nt] for nt in NodeType},
                 "total_nodes": sum(ref_n_per_type.values()),
@@ -871,26 +1389,15 @@ def main() -> int:
                 "test_neg": len(ref_test[1]),
             },
             "per_seed_results": per_seed_results,
-            "multi_seed_aggregate": {
-                "n_seeds": len(seeds),
-                "seeds_used": seeds,
-                "test_auc_mean": float(test_aucs_arr.mean()),
-                "test_auc_std": float(test_aucs_arr.std(ddof=0)),
-                "test_auc_min": float(test_aucs_arr.min()),
-                "test_auc_max": float(test_aucs_arr.max()),
-                "hard_gate_status": "BORDERLINE_CONDITIONAL_PASS",
-                "hard_gate_threshold": AUC_HARD_GATE,
-                "hard_gate_borderline_low": AUC_BORDERLINE_LOW,
-                "auc_interpretation": (
-                    "validates HTGN's structural learning capability on "
-                    "mixed-event provenance graphs; AUC ceiling reflects absent "
-                    "BERT semantic features (Phase 3 stage), Phase 4 re-test "
-                    "required per known_issues.md::Phase 4 待办"
-                ),
-            },
+            "multi_seed_aggregate": multi_seed_aggregate,
             "model_params": {
                 "htgn_total": ref["htgn_params"],
                 "head_total": ref["head_params"],
+                **(
+                    {"bert_projection_total": ref["bert_proj_params"]}
+                    if args.use_bert_features
+                    else {}
+                ),
             },
             "wall_seconds_total": wall,
             "outputs": {
@@ -909,6 +1416,14 @@ def main() -> int:
             f"min={summary['multi_seed_aggregate']['test_auc_min']:.4f} "
             f"max={summary['multi_seed_aggregate']['test_auc_max']:.4f}"
         )
+        if args.use_bert_features:
+            print("\n" + "=" * 70)
+            print(f"[task_b] BERT re-test hard gate: mean test AUC >= {BERT_HARD_GATE_MEAN}")
+            print(
+                f"[task_b] {summary['multi_seed_aggregate']['hard_gate_status']}: "
+                f"{summary['multi_seed_aggregate']['hard_gate_message']}"
+            )
+            print("=" * 70)
         for r in per_seed_runs:
             print(f"[task_b]   loss/AUC png -> {r['loss_auc_png']}")
             print(f"[task_b]   ROC png      -> {r['roc_png']}")
@@ -925,6 +1440,14 @@ def main() -> int:
         device=device,
         cached_events=None,
         seed_suffix="",
+        use_bert=args.use_bert_features,
+        bert_model=bert_model,
+        tokenizer=tokenizer,
+        cached_bert_features=None,
+        cached_bert_diagnostics=None,
+        bert_context_mode=args.bert_context_mode,
+        bert_pooling=args.bert_pooling,
+        png_prefix=png_prefix,
     )
     wall = time.time() - t0
 

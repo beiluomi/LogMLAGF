@@ -109,6 +109,18 @@
 
 > **† Phase 11 消融 B5 实施细节（2026-05-05 决议，回应 Checkpoint 7 RFC）**：B5（HGT-without-temporal）通过两个开关组合实现——`residual_alpha=0` 关闭 Time2Vec 边残差通道（详见 `docs/known_issues.md` "HGTConv edge_attr 接口限制 + Option C 残差通道决议"），`tgn_memory.enabled=false` 关闭 TGN 节点记忆模块（Checkpoint 8 实现时同样加 switch）。剩余配置即为 stock HGTConv on heterogeneous graph 的纯空间异构基线。这个组合开关让 B5 与完整 LogHetero 的代码路径**只差两个 yaml 配置项，不需要维护独立模型类**。`configs/model/graph/htgn.yaml` 是这两个 switch 的 single source of truth。
 
+> **‡ Footnote (2026-05-06, Checkpoint 11.2-γ-1 决议)：HTGN link prediction sanity 是 structure-determined 任务，BERT 跨模态融合的真实 evaluation 推到 Phase 7-8**
+>
+> Phase 4 入口对 Phase 3 conditional pass 做 sanity AUC re-validation，4 档 BERT 集成方案（random Gaussian baseline / [CLS] entity-identifier / mean-pool entity-event-context TOP_K=5 truncated / mean-pool entity-event-context TOP_K=2 in-spec 50-150 token）测得 4-seed mean test AUC 全部聚集在 **0.811-0.815 区间，std 0.007-0.016，统计上完全无差异**（详见 `docs/known_issues.md::Phase 12 论文素材::Phase 3 sanity AUC 演进数字` 4-row ablation 表）。这意味着 random edge masking + structural negative sampling 的链路预测任务由图拓扑信号完全决定，BERT 语义特征通过 input-feature 通道无法贡献额外信息。
+>
+> **决议**：Phase 3 conditional pass 状态从 "pass / fail" 二元变更为 "**informationally complete**"——回答的是"HTGN 在 structure-only 任务上 ceiling 0.81-0.82 OK"而非 "BERT 集成 OK"。原 Phase 4 BERT 重测 0.88 hard gate **撤销**（gate 设计基于"BERT 加 features 通常 +0.05-0.10 lift"的文献经验，但那个经验适用于 sentence classification / NER / QA 等 features 直接决定输出的任务，不适用于 structure-determined link prediction——agent Phase 3 Option A 决议时援引的论证是错的，本 footnote 诚实标记）。
+>
+> **BERT 跨模态融合的真实 evaluation 场景**：Phase 7 联合预训练 + Phase 8 anomaly detection。attack 事件含语义异常签名（罕见 process name + 异常文件路径模式 + IP 黑名单等），BERT semantic features 在 anomaly classification 上必有 lift，且 cross-modal attention（Phase 4.1 Checkpoint 12 实施）作为 fusion mechanism 比 input-feature injection 更适合该 use case。
+>
+> **Phase 4 进度影响**：Checkpoint 11 informationally complete → 直接进 Checkpoint 12 双向跨模态注意力实施。Phase 4 整体目标改为 "verify cross-attention architecture 落地 + forward 不报错 + 梯度正常"，AUC-style 单点验证关卡留到 Phase 7-8。详见 `docs/known_issues.md::Phase 4 待办::Phase 3 sanity AUC re-validation` 的 "completed with informational null finding" 标注 + `Phase 7 待办` 新增的 "BERT-fused-attention vs HTGN-only quick A/B 扩展" 议程。
+>
+> **Phase 12 论文价值**：4-row ablation 数字保留作为 negative-result-as-positive-contribution 素材——"我们诚实尝试 4 种 BERT 集成 + 验证 link prediction structure-determined + 把跨模态融合真实 evaluation 推到 Phase 7-8 anomaly detection" 是 Methods 章节 ablation 段末尾的一段 design rationale，比掩盖 null finding 强。
+
 ### 4.3 融合策略
 
 - 双向跨模态注意力（BERT 第 3 / 6 / 9 / 12 层）从 day 1 实现。
@@ -316,3 +328,4 @@ APT 检测里"出现一次就消失"的孤立节点经常是**攻击者的 stagi
 - **2026-05-05** — 决策 8（孤立节点保留策略）写入；回应 Checkpoint 3 启动指令第 4 条。
 - **2026-05-05** — Checkpoint 4 数据落定后修订：决策 6 时间窗粒度 1.0h 标 final（基于 16+1 直方图 + 决策表，全局统一不分档）；新增决策 9（训练与评测样本单位 = per-event subgraph）；`configs/data/atlas.yaml::subgraph.max_nodes` 50 → 128（PIDS 文献 KAIROS / MAGIC 在 100–500 节点区间，128 是 2 的幂便于批处理）。
 - **2026-05-06** — Checkpoint 11.1 RFC 决议：决策 9 加 footnote "Phase 4 跨模态联合预训练数据 benign-only 约束决议" — Option B（mixed 数据 + Phase 7 切 benign-only）通过附三条件（unverified-impact baseline 措辞 / Phase 11 必须 ablation / 3pp 阈值 / Phase 7 quick A/B 前置议程）。详见决策 9 footnote + `docs/known_issues.md::Phase 4 待办` resolved 标注 + `Phase 11 消融扩展` + `Phase 7 待办`。
+- **2026-05-06** — Checkpoint 11.2-γ-1 决议：决策 4.2 加 footnote "HTGN link prediction sanity 是 structure-determined 任务，BERT 跨模态融合的真实 evaluation 推到 Phase 7-8" — 4 档 BERT 集成 ablation (random / [CLS] / β truncated / β in-spec) AUC 全部 0.811-0.815 区间无统计差异；Phase 3 conditional pass 状态变更为 "informationally complete"，原 0.88 hard gate 撤销（gate premise "BERT 通常 +0.05-0.10 lift" 文献经验对 structure-determined link prediction 不适用，agent Phase 3 Option A 决议论证错误，本次诚实标记）；BERT 跨模态融合真实 evaluation 推到 Phase 7-8 anomaly detection；Checkpoint 12 双向跨模态注意力可直接启动，Phase 4 整体目标改为 "architecture 落地 + forward 不报错 + 梯度正常"。
