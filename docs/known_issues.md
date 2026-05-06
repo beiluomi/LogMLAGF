@@ -281,6 +281,28 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 **baseline 对比锚**：Phase 3 conditional pass 的 baseline 数字已 commit 进 `data/checkpoint10_taskB_summary.json`，含 4 seed 完整 loss/AUC 曲线 + multi_seed_aggregate（mean / std / min / max）。Phase 4 重测脚本输出同结构 JSON 写到 `data/checkpoint10_taskB_summary_bert.json`（区分文件名），前后对比一目了然。
 
+## Phase 5 待办
+
+### 字段级 mask 任务的"添加机制"（Phase 4 / Checkpoint 13 RFC 决议延迟到 Phase 5）
+
+**触发原因**：Phase 4 launch spec 写"目标字段替换 / 删除 / 添加机制"三件事，Checkpoint 13 RFC 决议（2026-05-06，user 拍板）对添加机制取 Option C 即 **Checkpoint 13 不实施，延迟到 Phase 5**。Checkpoint 13 落地的是替换=A（field 内全部 token 替换为 [MASK]）+ 删除=B（用单个 [MASK] 替代整个 field 让序列变短保留一个 anchor 位）两种操作，共用一个 prediction head 通过 label 区分。
+
+**为何延迟到 Phase 5**：
+
+- 添加机制的语义是"向良性事件序列注入虚假 / 异常 field 或 event"，与 RAPA-GTCL（创新点 2）的合成攻击逻辑天然耦合——RAPA 攻击模板本身就是基于 ATT&CK TTP 构造的"虚假 event 注入"。
+- Phase 5 实施 RAPA 模板时复用同一注入框架（注入逻辑、event-id 追踪、mask label 体系），比 Checkpoint 13 单独造一个轻量添加机制更工程一致。
+- 论文叙事上："字段级 mask 添加机制"与"基于 ATT&CK 的合成攻击注入"统一在 Phase 5 实施，对应 paper Methods 章节单一段落而非分散两段，叙事也更立体。
+- 这一延迟**不构成 spec 偏离**：Phase 4 launch spec 的"目标字段替换 / 删除 / 添加机制"三件事在 Phase 4 完成两件，第三件在 Phase 5 完成，但 Phase 4 / Checkpoint 13 的 commit message 与 module docstring 必须显式说明此项延迟与延迟到 Phase 5 的工程一致性 rationale，避免 review 时被误读为 spec 偏离。
+
+**Phase 5 启动时必须 cover 的扩展项**：
+
+1. RAPA 模板实施时，注入逻辑的核心 utility（field/event 插入、event-id 重新编号、混合训练样本生成）必须设计成可被字段级 mask "添加机制"复用的形式。具体讲：注入框架应该暴露一个 `inject_synthetic_field(event_seq, field_type, target_position) -> (modified_seq, label)` 类的接口，既能服务 RAPA 攻击模板（label = is_attack），也能服务字段级 mask 添加机制（label = is_inserted_field 二分类目标）。
+2. Checkpoint 13 实施的 ModifiedMLMHead（基于 fused hidden state 预测 mask token）需要在 Phase 5 添加机制实施时**额外加一个 binary classification head**预测每个 token 是否为"插入的虚假 field"，与原 token-prediction head 同时活跃但走独立 loss 与独立 fused hidden state 路径。
+3. 添加机制实施完成后追加 commit `feat(objectives): Phase 5 完成字段级 mask 添加机制（基于 RAPA 注入框架复用）`，并在本条目下追加 "完成日期 + commit hash + 与 RAPA 模板共享 utility 接口名" 闭环标注。
+4. Phase 12 论文 Methods 章节"4.x Modified MLM with field-level masking"段落必须把替换 / 删除 / 添加三机制作为同一个工程框架的三种实例化呈现，而非"我们 Phase 4 做了两件 Phase 5 又补了一件"的散乱叙事——通过统一注入框架的设计，三机制叙事是 architecturally unified 的。
+
+**审计 anchor**：本条目是 Checkpoint 13 RFC（2026-05-06）的 audit trail 之一，与下列 commit / 文档记录一同构成完整决议链：(a) `feat(objectives): Phase 4 / Checkpoint 13 modified MLM task on fused hidden states` commit message 中的"添加机制延迟到 Phase 5"段落；(b) `src/loghetero/models/objectives/modified_mlm.py` 模块 docstring 中的同段说明；(c) `docs/CHECKPOINT_LOG.md` Checkpoint 13 entry 的"决策点"小节。
+
 ## Phase 12 论文素材
 
 ### Phase 3 sanity AUC 演进数字（2026-05-06，Checkpoint 10 Option A conditional pass 对应 paper 措辞预定）
