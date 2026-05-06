@@ -634,6 +634,21 @@ Checkpoint 14.5 异常检测前置 probe 是创新点一融合机制效用的真
 
 **Phase 12 论文叙事 hook**：如 Phase 7 A/B 显示 BERT-fused-attention 在 anomaly detection 上确实有显著 lift，论文 Methods 章节就有了 "我们诚实排除 BERT 集成在 link prediction 上无效 + 验证 BERT 集成在 anomaly detection 上显著有效" 这条完整决策链；如 Phase 7 A/B 也显示 null finding，论文叙事重心要从"跨模态融合是创新点 1 的核心贡献"调整为"我们发现 BERT 跨模态融合在 provenance graph anomaly detection 上的边际贡献有限，主创新转向 HTGN 异构时序图编码 + RAPA-GTCL 攻击模板增强"——后一种叙事虽然弱化创新点 1 但保留了创新点 2 的完整性。
 
+### Deep cross-modal injection 训练成本预算提醒（2026-05-06，Checkpoint 14 RFC-1 Option A 决议触发）
+
+**触发原因**：Checkpoint 14 RFC-1 决议（2026-05-06，user 拍板）取 **Option A 深注入（ViLBERT 风格）**——手动迭代 BERT encoder layer 在 layer 3/6/9/12 后截获 hidden state 走 cross-attention，融合后的 hidden state 作为下一 BERT layer 的输入，graph 信息真正进入 BERT 计算路径。该决议是基于论文叙事一致性（"双向跨模态融合"匹配 ViLBERT / GreaseLM / Patton 系 prior work）+ Phase 11 ablation B3 deep vs shallow vs late fusion 三档对比的学术意义考量，但深注入相比浅注入会带来 Phase 7 联合预训练阶段更高的训练成本。
+
+**Phase 7 联合预训练阶段必须预算的训练成本差异**：
+
+1. **VRAM 占用更高**：手动迭代 BERT encoder layer 保留更多中间张量（每层 hidden state + cross-attention QKV + fused_text 残差路径），相比浅注入（只保留最终 BERT hidden state + 4 个独立 cross-attention 输出）VRAM 占用预期高出 30-60%。Phase 7 batch size 设计时必须以 deep injection profile 为准，不能套用 Phase 4 Checkpoint 12 smoke test 的 0.421 GB / N=2000 数字（那是 cross-attention 单模块 forward，不含 BERT layer-by-layer iteration 与 4 个融合点串联）。
+2. **单 step 时间更长**：BERT 12 layer × 4 融合点 cross-attention forward+backward 串联是顺序计算路径，不能像浅注入那样 4 个 cross-attention 块并行。Phase 7 训练 step time 预期比 baseline BERT-only forward 高 2-3 倍。
+3. **Phase 7 batch size 与 epoch 预算调整**：Phase 7 launch spec 落地时按 deep injection 实测 profile 重新估算 batch size（从 baseline BERT 单卡 batch=64 可能下调到 batch=32 或更低）+ epoch 数（从 baseline 30 epoch 可能因单 step 慢而总训练时间放大）。**Phase 4 Checkpoint 14 Gate 7 batch=16 真实 PyG batched HeteroData 实测 VRAM 数字是 Phase 7 batch size 设计的 single source of truth**——本待办条目要求 Phase 7 启动时 reference Checkpoint 14 Gate 7 完整数字（不只判断 < 16 GB 而是 absolute VRAM 数字 + 单 step 时间 absolute 数字）。
+4. **Phase 11 ablation B3 simple concat / late-fusion 对照**：deep injection 的训练成本对比作为 ablation B3 的 secondary metric 报告（除了 anomaly F1 主 metric 之外），论文 Methods 章节 ablation 段可以诚实报告"deep cross-modal injection 在 anomaly detection 任务上获得 X pp lift 但训练成本是 late-fusion 的 Y 倍"——这种 cost-benefit 透明在论文中是 contribution evidence 不是失分点。
+
+**预算提醒生效时机**：Phase 7 联合预训练 launch spec 启动前必读本条目；Phase 11 ablation matrix 实施 B3 对照时必读本条目。Phase 4 Checkpoint 14 Gate 7 实测数字落档后本条目下追加"Checkpoint 14 Gate 7 完整 VRAM 与时间数字 + Phase 7 batch size 推算"闭环标注。
+
+**审计 anchor**：本条目是 Checkpoint 14 RFC-1（2026-05-06 user 拍板 Option A 深注入）的 audit trail 之一，与 CHECKPOINT_LOG.md Checkpoint 14 entry 中的"决策点"小节 + Checkpoint 14 commit message 中的注入方式 rationale 段落一同构成完整决议链。
+
 ### Checkpoint 13 perplexity re-validation at full scale（2026-05-06，Checkpoint 13 收尾 Option C 三条件之 #1）
 
 **触发原因**：Checkpoint 13 perplexity 对比在 fast-iter 配置（500-event cap、5 epoch、4 seed）下测得 modified MLM 1.28 ± 0.04 vs traditional MLM 1.31 ± 0.05，relative lift +2.9% direction-consistent on 4/4 seeds，hypothesis-direction-positive 但 margin modest 不能称"显著低于"强信号。User RFC Option C 决议（2026-05-06）接受 modest signal 推进 Phase 4 收尾验证序列，但要求 Phase 7 启动时必须做 proper-scale 复验避免 fast-iter regime 限制造成的 lift 数字外推到 proper-scale 时失真。
