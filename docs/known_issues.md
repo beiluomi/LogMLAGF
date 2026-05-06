@@ -303,6 +303,32 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 **审计 anchor**：本条目是 Checkpoint 13 RFC（2026-05-06）的 audit trail 之一，与下列 commit / 文档记录一同构成完整决议链：(a) `feat(objectives): Phase 4 / Checkpoint 13 modified MLM task on fused hidden states` commit message 中的"添加机制延迟到 Phase 5"段落；(b) `src/loghetero/models/objectives/modified_mlm.py` 模块 docstring 中的同段说明；(c) `docs/CHECKPOINT_LOG.md` Checkpoint 13 entry 的"决策点"小节。
 
+### 20 TTP 模板设计必须含 6 类 hard negative benign admin behaviors（2026-05-06，Phase 5 launch spec 启动前预读议程）
+
+**触发原因**：Phase 5 创新点二的论文叙事是"首个把 MITRE ATT&CK 模板作为图增强样本与图文对比目标在预训练阶段联合训练的框架"。GPT 反思（2026-05-06）暴露的关键风险：合成攻击如果只与"普通良性事件"对比，模型有可能学到的是"识别注入格式"而非"识别攻击行为本身"——即合成攻击的"假可分性"陷阱。Phase 5 启动前必须把 hard negative benign admin behaviors 设计进模板对照集合，避免该陷阱在 Phase 8 anomaly detection 评测时才暴露。
+
+**6 类 hard negative benign admin behaviors（必须在 Phase 5 模板设计中显式 cover）**：
+
+1. **管理员 PowerShell**：合法系统管理员日常使用 PowerShell 执行配置修改、服务管理、用户管理、远程会话等操作。与 T1059.001 PowerShell 攻击 TTP 在表层 syscall + process tree 上极其相似，是模型最容易混淆的良性对照。
+2. **自动化脚本访问敏感路径**：备份脚本、配置同步工具、合法 audit 工具访问 `/etc/`、`/root/`、`C:\Windows\System32\` 等敏感路径。与 T1003 Credential Access、T1083 File and Directory Discovery 等 TTP 在文件访问模式上重叠。
+3. **合法 RDP**：用户合法远程桌面会话登录、远程办公、远程协助。与 T1021.001 RDP attack TTP 在 network connection + login event 模式上完全一致，区分点只在于是否有后续异常行为链。
+4. **安全扫描**：内部安全团队的漏洞扫描工具（Nessus / OpenVAS / qualys 等）大量端口扫描 + 远程探测 + 弱口令测试。与 T1046 Network Service Discovery、T1110 Brute Force 等 TTP 在 network behavior 上无法表层区分。
+5. **软件更新**：Windows Update、Linux package manager (apt/yum/dnf)、第三方软件自动更新等。涉及 process spawning + file modification + network download，与 T1105 Ingress Tool Transfer + T1059 Command and Scripting Interpreter 在表层模式上重叠。
+6. **备份程序大量读文件**：磁盘备份工具（rsync / robocopy / Veeam / NetBackup 等）一次性读取大量文件。与 T1005 Data from Local System、T1039 Data from Network Shared Drive 等 TTP 在 file read 频率上完全一致，区分点只在 destination（外部 IP vs 内网备份服务器）。
+
+**Phase 5 模板设计的硬性要求**：
+
+1. **20 个 ATT&CK TTP 模板**与**6 类 hard negative benign admin behaviors 模板**作为**两个并列对照集合**实施，不混在同一个生成器里。每类 hard negative 至少生成 200-500 条事件序列对应一个 TTP 模板的同等规模，让 Phase 8 anomaly classifier 必须区分"真攻击 TTP"与"模式相似的良性管理员行为"而非"攻击 vs 普通良性"。
+2. **模板生成必须共享同一注入框架**（即 Phase 5 待办::"字段级 mask 任务的添加机制" 子节中规划的 `inject_synthetic_field` / `inject_synthetic_event` 接口），让 hard negative 与攻击 TTP 在数据生成层面有完全相同的"注入指纹"——这样模型不能靠"是否有注入痕迹"作为分类捷径。
+3. **Phase 5 commit chain 必须包含一条 explicit hard-negative-coverage commit**（建议 message: `feat(rapa): Phase 5 hard negative benign admin behaviors templates (anti false-separability)`），把 6 类对照模板作为单独 audit anchor 落档，避免后续 review 时被误读为"Phase 5 只做了攻击模板"。
+4. **Phase 11 ablation matrix 必须含一个 "without hard negatives" 对照配置**（建议 cell ID: B7-γ）：跑同一异常检测 task 但训练数据移除 6 类 hard negative，看 anomaly F1 是否虚高——如虚高显著（>5pp）说明假可分性陷阱在 Phase 5 启动前预读议程下已被规避，论文叙事可以诚实报告"我们设计了 hard negative 对照集合避免假可分性风险"作为方法论 contribution。
+
+**Phase 12 论文 Methods 章节使用方式**：
+
+本议程作为 "我们如何设计 hard negative 对照集合避免合成攻击假可分性风险" 工程方法论支撑写入 Phase 12 论文 Methods 章节相关段落（建议放在 "4.x RAPA template design and benign control set" 子节或 "Reproducibility & methodology" 子节）。可对照写作 hook：cf. 主流 cyber security ML 论文（FLASH / KAIROS / MAGIC 等）大多没有显式 hard negative benign control，我们额外报告 6 类 hard negative 设计 + Phase 11 ablation B7-γ 对照实测，可作为 Methods 章节 contribution evidence——审稿人可以看到具体方法论的 false-separability 防御设计而非"我们注入了 ATT&CK TTP 然后模型学到了识别"的黑盒陈述。
+
+**审计 anchor**：本条目是 GPT 反思（2026-05-06）的 audit trail 之一，user 在 Checkpoint 13 收尾时提出 Phase 5 启动前预读议程，未来 Phase 5 launch spec 落地时本条目作为模板设计的硬性要求清单。Phase 5 commit message 与 module docstring 必须 reference 本条目作为 false-separability 防御设计的设计依据。
+
 ## Phase 12 论文素材
 
 ### Phase 3 sanity AUC 演进数字（2026-05-06，Checkpoint 10 Option A conditional pass 对应 paper 措辞预定）
