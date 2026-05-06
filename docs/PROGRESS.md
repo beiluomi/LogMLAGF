@@ -6,15 +6,15 @@
 
 ## 1. 项目当前阶段与 Checkpoint
 
-- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **进行中（2/5 sub-checkpoints 已完成；Phase 4 launch spec 严谨化升级版后总数为 5：11 / 12 / 13 / 14 / 14.5）**
-- **最新 Checkpoint**：Checkpoint 12（双向跨模态注意力模块实施）— 已通过（28/28 单元测试 + ruff + mypy + 全 suite 204 passed；spec review ⚠️ compliant 无 MUST_FIX；code quality review approved with minor fixes 已应用）+ **真实数据 smoke test 已通过**（M3_h2 first 1.0h window K-hop subgraph N=2000，4 项验证 NaN/Inf clean / 6 个 grad norm 全部 [0.11, 0.22] 落 [1e-7, 1e3] / VRAM 0.421 GB / forward+backward 2.6 ms 全 PASS；mean reduction 修订 RFC Option B 应用）
-- **Phase 4 进度**：Checkpoint 11（前置 RFC 消化 + 11.1 Option B benign-only 决议 + 11.2-γ-1 BERT informational null finding）+ Checkpoint 12（CrossModalAttention 模块 + build_event_attention_mask utility + 28 单元测试 + 案例研究脚本）已 done。下一个：Checkpoint 13（改造 MLM 集成）→ Checkpoint 14（七项 gate 验证）→ Checkpoint 14.5（异常检测前置 probe）→ tag `v0.4-fusion`。
+- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **进行中（3/5 sub-checkpoints 已完成；Phase 4 launch spec 严谨化升级版后总数为 5：11 / 12 / 13 / 14 / 14.5）**
+- **最新 Checkpoint**：Checkpoint 13（改造 MLM 任务集成）— 已通过（48/48 单元测试 + ruff + mypy + 全 suite 252 passed；spec review ✅ compliant with one minor caveat；code quality review approved with minor fixes 已应用；perplexity 对比 modified MLM 1.28 ± 0.04 vs traditional MLM 1.31 ± 0.05 在 4 seed direction-consistent +2.9% lift hypothesis-direction-positive；user 三处 sanity check 全部 CONFIRMED HELD：单 prediction head 共享、mask_type_per_sample debug 可见、添加=C deferral docstring + commit message 落档）
+- **Phase 4 进度**：Checkpoint 11 + Checkpoint 12（含真实数据 smoke test audit anchor）+ Checkpoint 13（CrossModalAttention 之上 + build_field_level_mask + MixedMLMCollator + ModifiedMLMHead + 80/20 perplexity 对比 driver）已 done。下一个：Checkpoint 14（七项 gate 验证）→ Checkpoint 14.5（异常检测前置 probe）→ tag `v0.4-fusion`。
 - **已完成 Phase**：Phase 0（tag `v0.0-scaffold`）+ Phase 1（tag `v0.1-data`）+ Phase 2（tag `v0.2-bert`）+ Phase 3（tag `v0.3-htgn`，conditional pass 后变更为 informationally complete via Checkpoint 11.2-γ-1）
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：`78c76ee`（Checkpoint 12 review fixes commit；前置 Checkpoint 12 主 commit 为 `cfa4ec6` CrossModalAttention 模块 + 28 测试；前置 docs commit `ce67209` Phase 4 launch spec 严谨化补丁；Checkpoint 11 commits 为 `c9796a8` γ-1 决议 + `cae7216` 11.1 Option B 三条件）
-- **Message**：`fix(fusion): Phase 4 / Checkpoint 12 review fixes (docstring + independence test + grad-norm comment)`
+- **Hash**：`5cba533`（Checkpoint 13 review fixes commit；前置 Checkpoint 13 主 commit `a3eb147` ModifiedMLMHead + build_field_level_mask + MixedMLMCollator + perplexity 对比 driver；前置 RFC 决议 docs `1e62fab` Phase 5 待办 添加=C deferral entry；前置 Checkpoint 12 commits 为 `cfa4ec6` 主体 + `78c76ee` review fixes + `8222e50` smoke test）
+- **Message**：`fix(objectives): Phase 4 / Checkpoint 13 review fixes (GELU + driver dedup + misc polish)`
 - **Date**：2026-05-06
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
@@ -51,7 +51,14 @@
 | 28 | `9f9ab17` | docs / handoff | docs(handoff): add 2026-05-06 session switch marker for next-window onboarding |
 | 29 | `ce67209` | docs / Phase 4 launch prep | docs(constitution): tighten link prediction task characterization (structure-dominated not structure-determined) |
 | 30 | `cfa4ec6` | checkpoint 12 | feat(fusion): Phase 4 / Checkpoint 12 bidirectional cross-modal attention module |
-| 31 | `<this commit>` | checkpoint 12 fix | fix(fusion): Phase 4 / Checkpoint 12 review fixes (docstring + independence test + grad-norm comment) |
+| 31 | `78c76ee` | checkpoint 12 fix | fix(fusion): Phase 4 / Checkpoint 12 review fixes (docstring + independence test + grad-norm comment) |
+| 32 | `6f2410f` | docs / checkpoint 12 close | docs(progress): close Checkpoint 12 — bidirectional cross-modal attention module |
+| 33 | `b19d13a` | docs / methodology | docs(methodology): record multi-agent review pattern lesson in Phase 12 论文素材 |
+| 34 | `8222e50` | test / checkpoint 12 smoke | test(checkpoint12): real-data smoke test on M3_h2 first window (mean reduction) |
+| 35 | `1e62fab` | docs / Phase 5 待办 | docs(known_issues): add Phase 5 待办 entry for 字段级 mask 添加机制延迟决议 |
+| 36 | `a3eb147` | checkpoint 13 | feat(objectives): Phase 4 / Checkpoint 13 modified MLM task on fused hidden states |
+| 37 | `5cba533` | checkpoint 13 fix | fix(objectives): Phase 4 / Checkpoint 13 review fixes (GELU + driver dedup + misc polish) |
+| 38 | `<this commit>` | docs / checkpoint 13 close | docs(progress): close Checkpoint 13 — modified MLM on fused hidden states |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 / Phase 4 设计偏离 + 经验启发式校准）
 

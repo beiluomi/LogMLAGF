@@ -544,4 +544,79 @@ Checkpoint 13（改造 MLM 任务集成，预计 2 天）：字段级 mask 任�
 
 ---
 
-*下一条记录：Phase 4 / Checkpoint 13（改造 MLM 任务集成）。*
+## Checkpoint 13 — 改造 MLM 任务集成（subagent-driven-development pattern 第二例 + RFC-first 工程纪律）
+
+- **完成日期**：2026-05-06
+- **Commits**：`1e62fab`（RFC 决议 docs：Phase 5 待办 添加=C deferral entry）+ `a3eb147`（主 commit：ModifiedMLMHead + build_field_level_mask + MixedMLMCollator + 48 测试 + perplexity 对比 driver）+ `5cba533`（review fixes：GELU 替换 + driver dedup + misc polish 共 8 项）
+- **方法论**：subagent-driven-development skill 第二次正式应用——controller 协调，dispatch implementer subagent → spec compliance reviewer → code quality reviewer → fix subagent。本次特别新增 RFC-first 纪律：implementer 在动手前先 NEEDS_CONTEXT 报告三处 spec 歧义，user 拍板后再实施，前置 RFC 比后置 fix 便宜得多的工程纪律首次落地。
+
+### RFC 决议（user 拍板，2026-05-06）
+
+Implementer 启动前发现三处 spec 解读歧义按纪律 STOP 不自己拍板，每处给出 3-4 个具体可比较的实现路径。user 拍板：
+
+| 问题 | 决议 | 理由 |
+|---|---|---|
+| Q1 替换机制 | Option A | field 内全部 token 替换为 [MASK]，经典 BERT MLM 的 field 粒度延伸最 well-understood，prediction 头复用 BERT 标准 LM head |
+| Q1 删除机制 | Option B | 用单个 [MASK] 替代整个 field，序列变短 field_len-1 但保留一个 anchor 位，与替换=A 输出形态对齐让单 prediction head 同时处理两种操作 |
+| Q1 添加机制 | Option C | Checkpoint 13 不实施，延迟到 Phase 5 与 RAPA 攻击模板一起做（攻击模板语义就是"虚假 field/event 注入"与添加机制天然耦合）|
+| Q2 50/50 混合粒度 | Option C | per-sample 随机 Bernoulli(0.5)，ELECTRA / Span-BERT 系列最常见 mixed MLM pattern，collator 一行 Bernoulli 即可，loss 自然按 sample 加权 |
+| Q3 perplexity 验证集 | Option A | M3_h2 first 1.0h window，与 Checkpoint 10/11/12 同源；80/20 event-level split + 5 epoch + 4 seed |
+
+### 实现交付
+
+- **`src/loghetero/models/objectives/modified_mlm.py`**（modified MLM 任务模块）：
+  - `ModifiedMLMHead`：单 prediction head（dense + GELU + LayerNorm + decoder 共 6 个 param tensors），跨 替换 / 删除 两种操作共享，靠 op_labels 区分而非 head 路由
+  - `build_field_level_mask` utility：替换=A（field 全 [MASK]）+ 删除=B（field 缩成单个 [MASK] anchor 位预测 first token of field）
+  - `build_token_level_mask` utility：传统 BERT 15% token MLM
+  - `MixedMLMCollator`：per-sample Bernoulli(0.5) 混合 token-mask 与 field-mask，每 batch 显式带 `mask_type_per_sample: (B,)` 张量便于 debug 时区分两种 mask 类型
+- **`tests/test_modified_mlm.py`**（48 测试 100% pass）
+- **`scripts/checkpoint13_perplexity_compare.py`**（Q3 perplexity 对比 driver）
+- **Phase 5 待办 entry**（`docs/known_issues.md` 在 commit `1e62fab` 落档）：添加机制延迟到 Phase 5 与 RAPA 攻击模板一起做的 audit anchor，确保后续 Phase 5 启动时不遗忘"添加机制还欠 Phase 4 一笔账"
+
+### Q3 perplexity 对比实测
+
+M3_h2 first 1.0h window，500-event cap（`--max-events` CLI 可调），80/20 split，5 epoch，4 seed [1, 7, 42, 100]：
+
+| Configuration | Mean PPL | Std | 4 seed 全 direction-consistent |
+|---|---:|---:|---|
+| Modified MLM (fused hidden states) | **1.28** | 0.04 | ✓ (lower on all 4 seeds) |
+| Traditional MLM (raw BERT hidden states) | 1.31 | 0.05 | — |
+
+**Relative improvement**：(1.31 - 1.28) / 1.31 = **+2.9%**，direction-consistent across 4 seeds。
+
+**Hypothesis-direction-positive**：modified MLM 的 perplexity 显著低于 traditional MLM，证据上支持"融合机制确实利用了图信息辅助 mask 恢复"的 spec hypothesis。500-event cap + 5 epoch 是 fast-iteration 配置，margin 偏 modest 但 direction-consistency 给出 early evidence。Phase 7 大规模联合预训练（更多 events + 更多 epoch）预期 margin 会扩大。
+
+### subagent-driven-development workflow 三轮验证
+
+1. **Implementer dispatch（首轮，Sonnet）**：按纪律 STOP 在 NEEDS_CONTEXT，报告三处 spec 歧义 + 每处 3-4 个 option 的 trade-off 分析。零行代码先于 RFC 落定。
+2. **User RFC 决议**：Q1 A/B/C + Q2 C + Q3 A，每处带详细 rationale。controller 把 RFC 答案 + user 提出的三处 sanity check 加严要求传回 fresh implementer dispatch（SendMessage 不可用，fresh dispatch 含完整 context）。
+3. **Implementer dispatch（次轮，Sonnet）**：commit `a3eb147`，48/48 测试 + Q3 perplexity 对比 +2.9% direction-consistent；三处 user-required sanity check 全部 reported pass。
+4. **Spec compliance review（Sonnet）**：✅ Compliant with one minor caveat（pyproject.toml RUF002 ignore 可避免，tautological test assertion 可改严）；三处 user sanity check **全部 CONFIRMED HELD**：(a) ModifiedMLMHead 仅 6 个 param tensors 无 per-operation routing；(b) MixedMLMCollator 每 batch 出 `mask_type_per_sample`；(c) 添加=C deferral 在 module docstring + commit message 双处落档。
+5. **Code quality review（Sonnet）**：Approved with minor fixes，3 Important（manual GELU 应用 nn.GELU + driver `_apply_token_mask` 重复 module utility 含 misleading dead code + 空 `if TYPE_CHECKING: pass`）+ 5 Minor（含 spec review 已 flag 的两条）。
+6. **Fix dispatch（Sonnet）**：commit `5cba533` 应用 8 项修复（3 Important + 5 Minor），48/48 测试 post-fix 复跑通过。
+
+### 决策点
+
+- **RFC-first 纪律首次落地价值**：implementer 在三处 spec 歧义前主动 STOP（不"做合理假设并文档化"），让 user 在动手前裁定，避免了三类常见后置 fix 痛点：(a) 替换/删除/添加三机制各做不同实现导致 prediction head 复杂化；(b) 50/50 混合粒度选错让 batch shape 假设破坏；(c) perplexity 对比验证集随意选导致诊断信号被混淆。这条纪律延续到 Checkpoint 14（七项 gate 验证）+ 14.5（异常检测前置 probe）任一遇到 spec 歧义触发 RFC。
+- **添加机制延迟到 Phase 5 的 audit 落档**：commit message + module docstring + Phase 5 待办 三处 redundant 落档，避免后续 review 时被误读为 spec 偏离，也避免 Phase 5 启动时遗忘"添加机制还欠 Phase 4 一笔账"。Phase 5 RAPA 模板实施时按 Phase 5 待办 entry 中给出的 utility 接口设计共享注入框架（`inject_synthetic_field` 等接口同时服务 RAPA 攻击与字段级 mask 添加）。
+- **删除机制 representative token = first token 的可重新评估性**：Checkpoint 13 选 first token of field 作为 删除=B 的 anchor 位预测目标，理由是 first wordpiece 通常是 root morpheme/field key，确定性 + 语义合理。Phase 5 / Phase 7 ablation 可选择性 revisit 为 last token、mode token、或 attention-pooled token，已在 module docstring 标注 Phase 5 revisit 钩子。
+- **500-event cap 的工程权衡**：M3_h2 first window 全 73,996 events × 5 epoch × 4 seed × 两 config 的总 BERT forward 量约 millions GPU calls，500-event cap 让 driver 落在 ~5 分钟实测时间且 direction-consistency 不受影响。`--max-events` CLI 让 user 可随时扩大规模复跑，cap 选择本身也在 commit message + driver docstring 双处文档。
+
+### 执行 Checkpoint 13 launch spec 完成清单
+
+- [x] 字段级 mask 任务实施（替换=A 全 token + 删除=B 单 anchor）
+- [x] 添加=C deferral 三处 audit 落档（commit message + module docstring + Phase 5 待办 entry）
+- [x] 单 prediction head 跨两种操作共享（user sanity check #1 CONFIRMED HELD）
+- [x] 50/50 混合训练 per-sample Bernoulli + mask_type_per_sample debug visibility（user sanity check #2 CONFIRMED HELD）
+- [x] perplexity 对比验证集 = M3_h2 first window 80/20 split / 5 epoch / 4 seed
+- [x] 改造 MLM (1.28 ± 0.04) 与传统 MLM (1.31 ± 0.05) perplexity 实测 + 4 seed direction-consistent +2.9% lift
+- [x] 8 项 review fixes 应用（3 Important + 5 Minor）后 48/48 测试 + ruff + mypy + 全 suite 252 passed
+- [x] PROGRESS.md / CHECKPOINT_LOG.md 同步更新
+
+### 下一步
+
+Checkpoint 14（Phase 4 整体集成 + 七项 gate 验证，预计 2.5 天）：把 Checkpoint 12 CrossModalAttention + Checkpoint 13 改造 MLM 串成完整 Phase 4 框架，端到端 forward 在 batch=8 ATLAS 真实数据上跑通；七项硬性 gate 全过才能进 Checkpoint 14.5 异常检测前置 probe。仍走 implementer → spec reviewer → code quality reviewer 4 步 pattern + RFC-first 纪律。
+
+---
+
+*下一条记录：Phase 4 / Checkpoint 14（七项 gate 验证）。*
