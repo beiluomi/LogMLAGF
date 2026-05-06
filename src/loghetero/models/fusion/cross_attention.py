@@ -18,8 +18,15 @@ Design decisions locked by the Phase 4 launch spec
 * attn_dim = 256  (unified attention space; head_dim = attn_dim / num_heads = 32)
 * num_heads = 8
 * dropout = 0.1
-* Bidirectional INDEPENDENT parameter sets — Text→Graph and Graph→Text
-  attention blocks have entirely separate weights; no sharing.
+* Bidirectional attention with independent QKV / output projections — `tg_attn`
+  and `gt_attn` are separate `MultiheadAttention` instances with no weight sharing,
+  and each has its own output projection (`tg_out_proj`, `gt_out_proj`). The two
+  per-modality input projections (`text_proj`, `graph_proj`) and LayerNorms
+  (`text_norm`, `graph_norm`) are shared across directions: a single linear projection
+  is direction-agnostic and adding per-direction projections would only duplicate
+  parameters without giving the two attention paths any directional capacity that
+  `tg_attn` / `gt_attn` cannot already learn. (Phase 7 ablation may revisit this if
+  the two paths develop conflicting gradient signals.)
 * Pre-LayerNorm style: LN before the cross-attention, residual after.
 * batch_first=True throughout; the (T, B, H) convention is NOT used.
 

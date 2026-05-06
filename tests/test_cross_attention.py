@@ -312,6 +312,10 @@ class TestGradientFlow:
             assert param.grad is not None, f"{name} has no gradient"
             grad_norm = param.grad.norm().item()
             assert grad_norm > 1e-8, f"{name} grad norm too small: {grad_norm}"
+            # Loss is fused_text.sum() / fused_graph.sum() over a (B, T, D) tensor;
+            # .sum() reduction inflates gradient norms by ~sqrt(B*T*D) compared to a
+            # mean-reduced loss. Observed norms are O(2k-4k); 1e6 is the explosion guard
+            # (would catch true NaN/Inf or 100x growth without false-positives at scale).
             assert grad_norm < 1e6, f"{name} grad norm too large: {grad_norm}"
             assert not torch.isnan(param.grad).any(), f"{name} has NaN gradient"
 
@@ -330,7 +334,11 @@ class TestGradientFlow:
             assert w.grad is not None, f"{mha_name}.in_proj_weight has no gradient"
             grad_norm = w.grad.norm().item()
             assert grad_norm > 1e-8, f"{mha_name}.in_proj_weight grad norm too small: {grad_norm}"
-            assert grad_norm < 1e6, f"{mha_name}.in_proj_weight grad norm too large: {grad_norm}"
+            assert (
+                grad_norm < 1e6
+            ), (
+                f"{mha_name}.in_proj_weight grad norm too large: {grad_norm}"
+            )  # explosion guard, see comment above
             assert not torch.isnan(w.grad).any()
 
     def test_output_projections_receive_grad(self) -> None:
@@ -347,7 +355,9 @@ class TestGradientFlow:
             assert param.grad is not None, f"{name} has no gradient"
             grad_norm = param.grad.norm().item()
             assert grad_norm > 1e-8, f"{name} grad norm too small: {grad_norm}"
-            assert grad_norm < 1e6, f"{name} grad norm too large: {grad_norm}"
+            assert (
+                grad_norm < 1e6
+            ), f"{name} grad norm too large: {grad_norm}"  # explosion guard, see comment above
             assert not torch.isnan(param.grad).any(), f"{name} has NaN gradient"
 
     def test_layer_norm_params_receive_grad(self) -> None:
@@ -424,11 +434,16 @@ class TestParameterIndependence:
         tg_changed = not torch.allclose(tg_w_before, tg_w_after)
         gt_changed = not torch.allclose(gt_w_before, gt_w_after)
 
-        # At minimum, tg should have changed (text_proj feeds tg query path).
-        # gt may or may not have changed, but the key point is they are independent.
-        assert (
-            tg_changed or gt_changed
-        ), "Neither tg nor gt in_proj_weight changed after an update — likely aliased."
+        # loss = fused_text.sum() only flows through the Text→Graph path, so tg should
+        # have changed and gt should NOT have changed. If the two in_proj_weight tensors
+        # were aliased (shared storage), updating tg would also update gt, causing
+        # gt_changed to be True and failing this assertion — which is exactly what we
+        # want to catch.
+        assert tg_changed and not gt_changed, (
+            f"Expected tg_changed=True and gt_changed=False (loss flows only through tg path); "
+            f"got tg_changed={tg_changed}, gt_changed={gt_changed}. "
+            f"If gt_changed=True, in_proj_weight tensors may be aliased."
+        )
 
     def test_tg_and_gt_attn_out_proj_do_not_alias(self) -> None:
         """MHA internal out_proj (inside tg_attn / gt_attn) must not alias."""
