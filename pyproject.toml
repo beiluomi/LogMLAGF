@@ -67,7 +67,7 @@ extend-exclude = ["data", "outputs", "wandb", "notebooks", "multirun"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "W", "SIM", "PTH", "RUF"]
-ignore = ["E501", "B008", "RUF012"]
+ignore = ["E501", "B008", "RUF012", "RUF002"]
 
 [tool.ruff.format]
 quote-style = "double"
