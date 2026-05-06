@@ -462,4 +462,41 @@ Phase 3 跨 4 个 checkpoint（7-10）、~10 commits、~3000 行代码（HTGN �
 
 ---
 
-*下一条记录：Phase 4 / Checkpoint 12（双向跨模态注意力实施，需 user 在新会话窗口下达 launch spec）。*
+## Phase 4 launch spec 严谨化补丁 — docs-only commit（post-Checkpoint 11，pre-Checkpoint 12）
+
+- **完成日期**：2026-05-06
+- **Commit message**：`docs(constitution): tighten link prediction task characterization (structure-dominated not structure-determined)`
+- **触发原因**：Checkpoint 11 收尾后 user 在 Phase 4 主体启动前对 launch spec 做严谨化升级，把 GPT 反思中暴露的论证缺口在动手实施任何代码前一次性堵上。本 docs-only commit 是 Phase 4 主体启动的前置必做项。
+
+### 措辞收紧
+
+- **decision 4.2 footnote ‡（design_decisions.md）**：`structure-determined` → `structure-dominated under current ATLAS data, negative sampling strategy, and fusion design`；新增"边界条件须保留"段落明确 cold-start link prediction 文献反例（GraphFormers / Patton / GreaseLM / ConGraT）；BERT 异常检测价值从"必有 lift"软化为"可能带来 lift（待 Phase 7-8 实证验证；hypothesis to test 而非 default-true）"。
+- **Phase 12 论文素材 Methods 段（known_issues.md）**：英文 paper-ready 段落把 `structure-determined` 改为 `structure-dominated under our current setting (random edge masking + structural negative sampling + input-feature BERT injection)`；添加显式段落说明该 null result **不外推**为 link prediction 普遍 structure-determined。
+- **新增"边界条件陈述"4 项硬性子条款（known_issues.md::Phase 12 论文素材::γ-1 决议后论文叙事 子节末尾）**：(1) Phase 4 入口实验否定的精确假设范围；(2) 不可外推的两条（不外推到所有 link prediction 任务无效 + 不外推到 anomaly detection 必有效）；(3) 论文 Methods 章节统一禁用 "structure-determined" 措辞；(4) Checkpoint 14.5 异常检测前置 probe 在论文中的角色定位（early validation gate evidence）。
+
+### 同步 Phase 4 launch spec 严谨化升级版（PROGRESS.md §5）
+
+- 4 sub-checkpoint 拆分（12 双向跨模态注意力 3 天 + 13 改造 MLM 2 天 + 14 整体集成 + 七项 gate 验证 2.5 天 + 14.5 异常检测前置 probe 4-5 天）
+- Checkpoint 14 七项硬性 gate（forward / 三套梯度 / attention entropy ∈ [0.3, 0.95] / modality dropout cos-sim < 0.95 / 8-sample overfit / random text ablation / VRAM & time profile）
+- Checkpoint 14.5 异常检测前置 probe 协议（5 个 ATT&CK TTP 纯本地实现禁外部 LLM API + within-TTP 80/20 holdout + 三配置 HTGN-only / BERT-only / fusion 对比 + lift ≥ 0.03 且 paired t-test p<0.1 双条件门槛 + BERT-only ≈ fusion 触发 RFC）
+- 工时从原 6.5 天扩展到 13-14 天，多投 6-7 天换"代码层面通过 + 模型确实在用 BERT + 至少在小规模异常检测 probe 上展示融合机制方向性正确"三层验证
+- Phase 5 RAPA 与 Phase 11 ablation 扩展议程（hard negative benign admin behaviors / modality utilization 严格 ablation）保留 known_issues.md 待办，Phase 4 不前置
+
+### 决策点
+
+- **"engineering progress ≠ research progress" 文化前置建立**：Phase 4 七项 gate + 14.5 probe 把 phase gate 从"代码层面通过"升级为"代码 + 模型确实使用 BERT + 异常检测方向性正确"三层验证。这条文化迁移到 Phase 7-8 联合预训练 + anomaly detection 阶段后，单一 metric 通过不再是充分条件，会自然延续到"训练 loss 收敛 + ablation 显著 + 跨数据集泛化"三层验证。
+- **禁外部 LLM API 协助生成 TTP 模板**（user 主动加严，比 GPT 反思建议更严）：可复现性 + 双盲投稿风险 + 论文可信度三条理由；模板必须基于 MITRE ATT&CK 公开 STIX 数据 + 现有 ATLAS 解析器纯本地实现。
+- **边界条件陈述统一**：所有 link prediction sanity 相关陈述统一用 "structure-dominated under current ATLAS data, negative sampling strategy, and fusion design"；禁用 "structure-determined" 单数 categorical 措辞。该约束扩展至 Phase 12 论文 Methods 章节所有未来段落。
+
+### 执行 Phase 4 launch spec 严谨化补丁 完成清单
+
+- [x] design_decisions.md 决策 4.2 footnote 措辞收紧 + 边界条件保留段落 + BERT 异常检测价值软化
+- [x] known_issues.md Phase 12 论文素材 Methods 英文段措辞收紧 + 4 项边界条件硬性子条款
+- [x] PROGRESS.md §2 commit hash 更新（c9796a8 落档 + 9f9ab17 handoff marker 落档 + 本 commit 占位）
+- [x] PROGRESS.md §5 下一步预期工作扩展（4 sub-checkpoint + 七项 gate + 14.5 probe 完整列出）
+- [x] PROGRESS.md §6 active 待回答问题更新（Phase 4 launch spec 严谨化升级版下达完成 + docs commit 落地）
+- [x] CHECKPOINT_LOG.md 追加本条 docs-only patch entry
+
+---
+
+*下一条记录：Phase 4 / Checkpoint 12（双向跨模态注意力实施，subagent-driven-development pattern）。*

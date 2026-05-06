@@ -13,8 +13,8 @@
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：（本 commit；Checkpoint 11 单 commit 含 11.1 Option B 三条件 docs **已在 commit `cae7216` 落档** + 11.2-γ-1 决议 + 4 ablation artifacts + 决策 4.2 footnote + PROGRESS / CHECKPOINT_LOG 同步）
-- **Message**：`feat(phase4): Phase 4 / Checkpoint 11 RFC resolution + sanity null finding (γ-1)`
+- **Hash**：（本 commit，docs-only Phase 4 launch spec 严谨化补丁；前置 Checkpoint 11 commit 为 `c9796a8` 含 11.2-γ-1 决议 + 4 ablation artifacts + 决策 4.2 footnote + PROGRESS / CHECKPOINT_LOG 同步；Checkpoint 11.1 Option B 三条件 docs 在 `cae7216` 落档；本 commit 是 Phase 4 主体启动前的 docs-only 措辞收紧 + Phase 12 论文素材边界条件 note + 下一步计划扩展同步）
+- **Message**：`docs(constitution): tighten link prediction task characterization (structure-dominated not structure-determined)`
 - **Date**：2026-05-06
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
@@ -47,7 +47,9 @@
 | 24 | `98b3c1a` | merge / tag v0.3-htgn | merge: Phase 3 HTGN encoder (4 sub-checkpoints) — conditional pass |
 | 25 | `901ebbd` | docs | docs(known_issues): Checkpoint 10 lesson (data-following over RFC-form-following) |
 | 26 | `cae7216` | docs / checkpoint 11.1 | docs(constitution): Checkpoint 11.1 Option B with three conditions + Phase 12 BERT root-cause investigation entry |
-| 27 | `<this commit>` | checkpoint 11.2-γ-1 | feat(phase4): Phase 4 / Checkpoint 11 RFC resolution + sanity null finding (γ-1) |
+| 27 | `c9796a8` | checkpoint 11.2-γ-1 | feat(phase4): Phase 4 / Checkpoint 11 RFC resolution + sanity null finding (γ-1) |
+| 28 | `9f9ab17` | docs / handoff | docs(handoff): add 2026-05-06 session switch marker for next-window onboarding |
+| 29 | `<this commit>` | docs / Phase 4 launch prep | docs(constitution): tighten link prediction task characterization (structure-dominated not structure-determined) |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 / Phase 4 设计偏离 + 经验启发式校准）
 
@@ -71,23 +73,49 @@
 
 ## 5. 下一步预期工作
 
-**Checkpoint 12（Phase 4.1 双向跨模态注意力，预计 3 天）**：实施 `src/loghetero/models/fusion/cross_attention.py`，按 v3 prompt §6 Phase 4 推进。设计参数预先锁定：
+**Phase 4 主体 4 sub-checkpoint 推进（2026-05-06 launch spec 严谨化升级版，预计 13-14 天）**：
+
+**Checkpoint 12（Phase 4.1 双向跨模态注意力实施，预计 3 天）**：实施 `src/loghetero/models/fusion/cross_attention.py`。设计参数预先锁定避免 RFC 触发：
 
 - 双向独立参数（Text→Graph 与 Graph→Text 各自独立 attention 参数不共享）
-- text token 768 维与 graph node 256 维之间通过线性投影对齐到统一 attention dim
+- text token 768 维与 graph node 256 维通过线性投影对齐到统一 attention dim 256
 - attention head 数 8（与 BERT-base 对齐）
-- BERT hidden state 暴露通过 output_hidden_states=True，融合层选第 3 / 6 / 9 / 12 层共 4 个融合点
-- Attention mask 严格限制为"每条 text token 只能 attend 到与其所在日志事件直接相关的图节点"，验证可行后再考虑放宽
+- BERT hidden state 通过 output_hidden_states=True 暴露每层 hidden states，融合层选第 3 / 6 / 9 / 12 共 4 个融合点
+- Attention mask 严格限制为"每条 text token 只能 attend 到与其所在日志事件直接相关的图节点"，mask 构造逻辑写成独立 utility 便于后续放宽
 
-**Checkpoint 12 报告必须包含**：跨模态 attention forward shape 测试、attention 权重在一个具体案例上的可视化（notebook 里 case study）、端到端梯度回传 sanity。
+**Checkpoint 12 报告必须包含**：跨模态 attention forward shape 测试、attention 权重在一个具体 case 上的可视化（notebook 里展示哪些 graph node 被哪些 text token 高权重 attend）、端到端梯度回传 sanity（loss.backward() 后 BERT 投影 / graph 投影 / cross-attention 三套参数全部收到非零梯度且梯度范数在合理量级）。
 
-**之后**：Checkpoint 13（Phase 4.2 改造 MLM 任务集成，2 天）→ Checkpoint 14（Phase 4 整体集成 + 端到端 forward smoke test，1.5 天）→ tag `v0.4-fusion`。
+**Checkpoint 13（Phase 4.2 改造 MLM 任务集成，预计 2 天）**：v3 prompt §6 Phase 4.3 字段级 mask 任务（目标字段替换 / 删除 / 添加机制）；融合后隐藏状态预测 mask token 而非原始 BERT 输出；混合训练比初值 50/50；与传统 MLM perplexity 对比验证融合后预测确实利用图信息。
 
-**Phase 4 整体目标变更（2026-05-06）**：Checkpoint 11.2-γ-1 决议把 AUC-style 单点验证撤销，Phase 4 主交付物是"跨模态融合架构落地且 forward 不报错且梯度回传正常"，深层验证留给 Phase 7-8 联合预训练 + anomaly detection 阶段统一进行。
+**Checkpoint 14（Phase 4 整体集成 + 七项 gate 验证，预计 2.5 天）**：原 forward 不报错 + 梯度正常两项 gate 升级为以下七项硬性 checklist 全部 pass：
+
+1. **forward / backward 不抛**——batch=8 ATLAS 真实数据
+2. **梯度三套全非零**——BERT 投影 / HTGN / cross-attention 任一 `.grad` 全零触发 RFC
+3. **fusion 参数非退化**——cross-attention normalized entropy = H(attention) / log(n_keys) ∈ [0.3, 0.95]，下界防 single-token hard mask 退化，上界防均匀分布退化，两端越界触发 RFC
+4. **modality dropout 显著影响**——BERT 输出置零后 forward 输出与正常 forward cos-sim < 0.95
+5. **小 batch overfit sanity**——8 固定样本训 50 epoch，loss 收敛接近零
+6. **random text ablation**——random token 替换真实日志文本输入，hidden states 与真实输入 hidden states 在 cosine 距离上显著差异（排除 cross-attention 学成对任意 text 给固定 summary 的 subtle failure）
+7. **memory & time profile**——batch=16 真实 PyG batched HeteroData 实测 VRAM < 16 GB on RTX 4090，单步 forward+backward < 500 ms
+
+**Checkpoint 14.5（异常检测前置 probe，Phase 4 真正最后一关，预计 4-5 天）**：
+
+- 5 个 ATT&CK TTP 模板（T1059.001 PowerShell / T1003.001 LSASS Memory / T1071.001 Web Protocols / T1547.001 Registry Run Keys / T1041 Exfiltration over C2 Channel），覆盖 5 个不同战术阶段
+- **TTP 模板必须 agent 直接基于 MITRE ATT&CK 公开 STIX 数据 + 现有 ATLAS 解析器手写实现，禁止调用 ChatGPT 或任何外部 LLM API 协助生成**——理由：可复现性（外部 API 输出不同时间漂移）+ 双盲投稿风险（API 日志可追溯）+ 论文可信度（依赖外部服务的研究工程在论文中可信度低于纯本地实现）
+- 200-500 条合成攻击事件注入良性 ATLAS 子图 + 同等数量未注入良性事件作为对照
+- 任务：事件级二分类（给定一条事件加其异构子图上下文预测是否合成攻击）
+- 数据切分：**within-TTP 80/20 event-level holdout**（每 TTP 各自抽 20% 事件作 test，剩 80% 训练，5 TTP 合并报总 F1）；leave-one-TTP-out 留给 Phase 8
+- 三配置对比：HTGN-only embedding / BERT-only embedding / Phase 4 fusion embedding；每配置 + simple MLP head 训 30 epoch 4 seed 重复
+- **必须并列报三种配置 F1**——BERT-only 防 ATT&CK TTP 名称（"powershell.exe -enc"、"lsass.exe"、"reg add ...\\Run"）词面攻击信号污染论证；BERT-only ≈ fusion 触发 RFC 而非通过
+- **通过门槛双条件**：(a) fusion 比 HTGN-only 平均 F1 lift ≥ 0.03 且 (b) 4 seed 配对 t-test p < 0.1（4 seed 样本太小用 0.1 而非严格 0.05）；同时满足才通过；只满足 (a) 不满足 (b) 写成"方向性正向但样本不足判定"作为弱信号推进 Phase 5-7 但 Phase 8 严格复验
+- 14.5 通过后申请 v0.4-fusion tag 完成 Phase 4；Phase 5 RAPA 模板正式实施会复用 14.5 实现的 5 个原型再扩展到 20 个完整覆盖
+
+**Phase 4 整体目标（2026-05-06 launch spec 严谨化升级版）**：Phase 4 主交付物是"跨模态融合架构落地 + 七项 gate 全过 + Checkpoint 14.5 异常检测前置 probe 双条件通过"。原"forward 不报错 + 梯度回传正常"两项扩展为七项 gate 防止"代码不报错就算通过"被审稿人质疑放水；新增 14.5 probe 提供跨模态融合方向性早期诊断证据，避免 Phase 8 才发现 fusion 不工作回退三个 phase 的代价。AUC-style 单点验证撤销不变，深层验证留 Phase 7-8。
+
+**任一 gate 不通过 + Checkpoint 14.5 双条件不通过 + BERT-only F1 ≈ 或 ≥ fusion F1 都触发 RFC**。Phase 5 RAPA 模板与 Phase 11 消融矩阵扩展议程（含 hard negative benign admin behaviors 与 modality utilization 严格 ablation）作为 known_issues.md 待办保留，Phase 4 不前置实施。
 
 ## 6. 当前 Active 待回答问题
 
-无（Checkpoint 11.1 Option B + Checkpoint 11.2-γ-1 双决议落地完成；Phase 4 待办::Phase 3 sanity AUC re-validation 标 informationally complete；Checkpoint 12 launch spec 由 user 在新会话窗口中下达）。
+无（Checkpoint 11.1 Option B + Checkpoint 11.2-γ-1 双决议落地完成；Phase 4 待办::Phase 3 sanity AUC re-validation 标 informationally complete；Phase 4 launch spec 严谨化升级版已于 2026-05-06 在本会话窗口下达完成，含 4 sub-checkpoint + 七项 gate + Checkpoint 14.5 异常检测前置 probe + 禁外部 LLM API 五项硬性纪律；本 commit 是 Phase 4 主体启动前的 docs-only 措辞收紧补丁，下一动作为 Checkpoint 12 跨模态注意力模块实施）。
 
 ## 7. 快速复现指令
 

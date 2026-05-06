@@ -271,23 +271,32 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 > | (d) BERT mean-pool entity-event-context, TOP_K=2       |                0.8147 | 0.0109 |     +0.0003 | inputs in spec 50-150 token range, 0.4% truncated              |
 >
 > All four configurations cluster within statistical noise (means 0.811-0.815, std
-> 0.007-0.016), establishing that this link prediction task with random edge masking
-> + structural negative sampling is **structure-determined**: graph topology fully
-> determines whether an edge exists between (u, v), and BERT semantic features about
-> node identities cannot contribute additional discriminative information through
-> the input-feature channel regardless of pooling strategy or input formatting.
+> 0.007-0.016), establishing that **under our current experimental setting** — random
+> edge masking, structural (in-batch type-respecting) negative sampling, input-feature
+> BERT injection through a frozen-encoder + learned-projection channel, and the
+> ATLAS provenance graph — this link prediction task is **structure-dominated**:
+> graph topology dominates the discriminative signal, and BERT semantic features
+> about node identities do not contribute additional separability through the
+> input-feature channel regardless of pooling strategy or input formatting we tried.
 >
-> This null result is methodologically important: it shows that **input-feature
-> injection is not the right design point for cross-modal value in our setting**.
-> Our subsequent design — bidirectional cross-modal attention as a fusion mechanism
-> applied during pretraining (Phase 4) and evaluated downstream on anomaly detection
-> (Phase 7-8 anomaly F1) where attack events carry semantic anomaly signatures
-> (rare process names, anomalous file path patterns, blocklist IPs) — addresses the
-> right granularity at which BERT semantics augment HTGN's structural representation.
-> The Phase 8 anomaly F1 ablation B7 (mixed vs benign-only pretraining) and the Phase 7
-> BERT-fused-attention vs HTGN-only quick A/B together provide the empirical evidence
-> that cross-modal value resides in attention-as-fusion-mechanism rather than
-> features-as-input-to-structure-prediction.
+> The bounded scope of this null result deserves emphasis: it does **not** claim
+> that link prediction is intrinsically structure-determined in general — the
+> text-rich-graph literature (GraphFormers, Patton, GreaseLM, ConGraT) reports
+> the opposite finding under different graph regimes (especially text-rich graphs
+> without dense local structure or with sparse-edge cold-start nodes). What our
+> result rules out is the specific hypothesis "naive BERT input-feature injection
+> can lift our particular link-prediction sanity check," and our subsequent design
+> response — bidirectional cross-modal attention as a *fusion mechanism* applied
+> during pretraining (Phase 4) and evaluated downstream on anomaly detection (Phase
+> 7-8 anomaly F1) where attack events carry semantic anomaly signatures (rare
+> process names, anomalous file path patterns, blocklist IPs) — is a hypothesis
+> to be tested, not a guaranteed remedy. The Phase 4 Checkpoint 14.5 anomaly
+> detection probe (within-TTP 80/20 holdout, 5 ATT&CK templates, three-config
+> contrast HTGN-only / BERT-only / fusion) provides early directional evidence;
+> the Phase 8 anomaly F1 ablation B7 (mixed vs benign-only pretraining) and the
+> Phase 7 BERT-fused-attention vs HTGN-only quick A/B together close the loop
+> with full-scale empirical evidence on whether cross-modal value resides in
+> attention-as-fusion-mechanism for our setting.
 
 **所有占位符已填（2026-05-06，Checkpoint 11.2-γ-1 决议落地）**：
 
@@ -300,7 +309,14 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 **禁止覆盖任一 artifact**——4 档数据全部保留作为 Phase 12 ablation 表的可复现锚点。Phase 12 论文写作时直接引用上述表格 + 4 个 JSON 数字。
 
-**γ-1 决议后论文叙事**：从原计划"BERT integration validates HTGN" 改为 "BERT integration null result on structure-determined link prediction sanity, indicating that cross-modal value resides in attention-as-fusion-mechanism (Phase 4) and feature-injection-into-anomaly-detection (Phase 7-8) rather than feature-as-input-to-structure-prediction"。这是 negative-result-as-positive-contribution 叙事——审稿人通常欣赏作者诚实报告 null finding 而非掩盖。完整决议链 audit trail：`docs/design_decisions.md` 决策 4.2 footnote (2026-05-06) + Phase 4 待办::Phase 3 sanity AUC re-validation 闭环标注 + Phase 7 待办::BERT-fused-attention vs HTGN-only quick A/B 扩展 议程。
+**γ-1 决议后论文叙事**：从原计划"BERT integration validates HTGN" 改为 "BERT integration null result on **structure-dominated** link prediction sanity (under our current ATLAS data + structural negative sampling + input-feature injection setting), indicating that cross-modal value plausibly resides in attention-as-fusion-mechanism (Phase 4, to be probed by Checkpoint 14.5 anomaly detection probe and validated by Phase 7-8 full-scale anomaly F1) rather than feature-as-input-to-structure-prediction"。这是 negative-result-as-positive-contribution 叙事——审稿人通常欣赏作者诚实报告 null finding 而非掩盖。完整决议链 audit trail：`docs/design_decisions.md` 决策 4.2 footnote (2026-05-06) + Phase 4 待办::Phase 3 sanity AUC re-validation 闭环标注 + Phase 7 待办::BERT-fused-attention vs HTGN-only quick A/B 扩展 议程。
+
+**边界条件陈述（2026-05-06 Phase 4 launch spec 严谨化补丁，避免论文 Methods 章节被审稿人反驳）**：
+
+1. **Phase 4 入口实验的精确否定范围**：Phase 4 入口 Checkpoint 11.2-γ-1 实验否定的精确假设是"BERT 简单 input-feature injection 能提升我们当前设置下的 link prediction sanity"，此处的"当前设置"特指 ATLAS provenance graph + random edge masking + structural in-batch type-respecting negative sampling + frozen BERT + learned linear projection 这五项工程组合，缺一不可。
+2. **不可外推的两条**：(a) **不能外推**为"BERT 在所有 link prediction 任务上无效"——cold-start link prediction 在文献中（GraphFormers / Patton / GreaseLM / ConGraT 等 text-rich graph 工作）有大量依赖语义特征的反例，特别是 text-rich graphs without dense local structure 或 sparse-edge cold-start node 场景；(b) **不能外推**为"BERT 跨模态融合在 anomaly detection 任务上必有效"——anomaly detection 任务的 BERT 价值是 hypothesis to test，需要 Phase 7-8 重新验证而非默认成立，Phase 4 内部由 Checkpoint 14.5 anomaly detection 前置 probe 提供方向性早期证据。
+3. **论文 Methods 章节统一措辞**：所有 link prediction sanity 相关陈述必须用 "structure-dominated under current ATLAS data, negative sampling strategy, and fusion design" 这一带边界条件的精确措辞，**禁止用** "structure-determined link prediction" 这种过强陈述——后者会被审稿人引用上述 4 篇 text-rich graph 工作当场反驳，前者则因带边界条件审稿人查不到反例。
+4. **Phase 4 Checkpoint 14.5 异常检测前置 probe 在论文中的角色**：作为 "我们没有等到 Phase 8 才发现 fusion 不工作" 的工程严谨性 evidence。Probe 协议（5 个 ATT&CK TTP 纯本地实现禁外部 LLM API + within-TTP 80/20 holdout + 三配置 HTGN-only / BERT-only / fusion 对比 + lift ≥ 0.03 且 paired t-test p<0.1 双条件门槛 + BERT-only ≈ fusion 触发 RFC）在 Methods 章节作为 "early validation gate" 段落直接引用，比 Phase 8 final number 更说明研究纪律。
 
 **论文叙事框架**（解释为什么这一段是 contribution 而非 limitation）：
 
