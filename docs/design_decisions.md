@@ -248,6 +248,14 @@ Checkpoint 4 数据揭示 ATLAS 每 window 含 16k–200k events，远超早期 
   - (a) 故意构造跨集泄漏的 (host, window) 数据，期望 leakage assert 触发
   - (b) 故意把某个 log type 的时间戳偏移 12 小时（模拟 TZ 错误），期望 TZ sanity assert 触发
 
+### Footnote (2026-05-06, Checkpoint 11.1 RFC)：Phase 4 跨模态联合预训练数据 benign-only 约束决议
+
+Phase 4 跨模态联合预训练阶段采用 mixed 数据（含未过滤 attack 事件）作为 **unverified-impact baseline 而非默认无害选择**。Benign-only pretraining 推到 Phase 7 实施，届时按 `AtlasGroundTruthLabelLoader`（Phase 8 待办成果）切真 benign 子集。Phase 11 ablation **必须**包含 `pretrain_data: {mixed, benign_only_ground_truth}` 二档对比（如时间允许加 `benign_only_paper_timeline` 第三档）量化 attack-noise 对预训练表征的实际污染程度。**如 ablation 显示 mixed vs benign_only 在 Phase 8 anomaly F1 上差异 > 3 个百分点，论文 Methods 章节必须诚实说明 mixed 预训练带来的 representation 偏差并把 benign-only 作为推荐配置**。
+
+**决议背景**：Phase 3 / Checkpoint 10 Option C 决议（放宽 benign-only 约束）把 Phase 4 入口的 benign-only 重审作为待办挂出（详见 `docs/known_issues.md::Phase 4 待办::Pretraining 数据 benign-only 约束的重审议程`）。Checkpoint 11.1 RFC 三选项 A（前置 Phase 8 工作）/ B（mixed + Phase 7 切 benign）/ C（论文 timeline 启发式 stop-gap），user 拍板 **Option B 附三条件**：(1) 本 footnote 措辞紧版 + 必须 ablation + 3pp 阈值；(2) Phase 11 ablation 矩阵预先扩展（详见 `known_issues.md::Phase 11 消融扩展`）；(3) Phase 7 启动前 mixed-vs-benign quick A/B 测试预设议程（详见 `known_issues.md::Phase 7 待办`）。
+
+**关键纪律**：本 footnote 把 mixed 数据明确标注为 "unverified-impact baseline" 而非"默认无害"——避免"mixed 影响小"这个未验证假设悄悄变成既定事实写进论文。Phase 12 写论文时必须先看 Phase 11 ablation 实测数字才决定 Methods 章节叙事方向。
+
 ---
 
 ## 决策 7：AI 协作披露策略（commit `Co-Authored-By`）
@@ -307,3 +315,4 @@ APT 检测里"出现一次就消失"的孤立节点经常是**攻击者的 stagi
 - **2026-05-05** — 引用核实修订：决策 2 删除 PLATO（确认为 AI 引用幻觉），扩充 Innovation 1 prior work 至 4 条 verified 引用（GraphFormers / GreaseLM / Patton / THLM），Innovation 2 加入 ConGraT 作为 GTCL 直接先验且 Threatrace 标注 Phase 12 待核实；决策 4.2 加入 HGT building-block 引用；决策 5 给 SrcSinkObject 加显式 footnote。
 - **2026-05-05** — 决策 8（孤立节点保留策略）写入；回应 Checkpoint 3 启动指令第 4 条。
 - **2026-05-05** — Checkpoint 4 数据落定后修订：决策 6 时间窗粒度 1.0h 标 final（基于 16+1 直方图 + 决策表，全局统一不分档）；新增决策 9（训练与评测样本单位 = per-event subgraph）；`configs/data/atlas.yaml::subgraph.max_nodes` 50 → 128（PIDS 文献 KAIROS / MAGIC 在 100–500 节点区间，128 是 2 的幂便于批处理）。
+- **2026-05-06** — Checkpoint 11.1 RFC 决议：决策 9 加 footnote "Phase 4 跨模态联合预训练数据 benign-only 约束决议" — Option B（mixed 数据 + Phase 7 切 benign-only）通过附三条件（unverified-impact baseline 措辞 / Phase 11 必须 ablation / 3pp 阈值 / Phase 7 quick A/B 前置议程）。详见决策 9 footnote + `docs/known_issues.md::Phase 4 待办` resolved 标注 + `Phase 11 消融扩展` + `Phase 7 待办`。

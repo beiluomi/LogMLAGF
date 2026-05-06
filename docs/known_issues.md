@@ -188,7 +188,11 @@ y_dst[v] = HGTConv(x_dict)[v] + α · sum_{(u,v) ∈ E_r} MLP(concat(time2vec(t_
 
 ## Phase 4 待办
 
-### Pretraining 数据 benign-only 约束的重审议程（2026-05-06，Checkpoint 10 Option C 决议触发）
+### Pretraining 数据 benign-only 约束的重审议程（2026-05-06，Checkpoint 10 Option C 决议触发）— **RESOLVED 2026-05-06 (Checkpoint 11.1 RFC: Option B 通过附三条件)**
+
+> **闭环标注（2026-05-06，Checkpoint 11.1 RFC 决议）**：本议程经 Checkpoint 11.1 RFC 三选项分析（A 前置 Phase 8 工作 / B mixed + Phase 7 切 benign-only / C 论文 timeline 启发式 stop-gap），user 拍板 **Option B 附三条件**：(1) `docs/design_decisions.md` 决策 9 footnote 紧版措辞（mixed = unverified-impact baseline + Phase 11 必须 ablation + 3pp 叙事调整阈值）；(2) `docs/known_issues.md::Phase 11 消融扩展` 新增 B7（mixed vs benign_only_ground_truth 二档对比）；(3) `docs/known_issues.md::Phase 7 待办` quick A/B 前置议程。本议程视为 resolved；以下原 (a)(b)(c) 三选项分析保留作为决议过程 audit trail。
+
+
 
 Phase 3 Checkpoint 10 因 `AtlasGroundTruthLabelLoader` Phase 8 待办无法切真实 benign-only 子图，user 选 Option C 把 benign-only 约束推到 Phase 4 入口讨论。**Phase 4 跨模态融合启动前必须重审 pretraining 数据的 benign-only 约束**——开 Phase 4 第一个 RFC 议程，逐条决议：
 
@@ -247,15 +251,31 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 > Phase 3 link prediction sanity validates HTGN's structural learning capability on
 > mixed-event provenance graphs with random node features (test AUC = **0.8144 ± 0.0068**
 > across 4 seeds [1, 7, 42, 100], M3_h2 first 1.0h window 2000-node K-hop subgraph,
-> 30-epoch BCE training with structured negative sampling 1:1). Following BERT
-> integration in Phase 4, the same experiment yields test AUC = **<Phase 4 实测填>** ±
-> **<std 实测填>** (Δ = +**<gain 实测填>**), confirming that semantic features substantially
-> augment HTGN's edge prediction capacity beyond pure structural signal. This empirical
-> decomposition isolates the contribution of (a) heterogeneous attention + Option-C
-> temporal residual + per-type TGN memory (the AUC 0.8144 baseline) versus (b) BERT
-> cleaner-driven semantic features (the +<gain> delta).
+> 30-epoch BCE training with structured negative sampling 1:1).
+>
+> A naive BERT integration (frozen `[CLS]` embedding of `"<type> <id>"` per-entity short
+> text, learnable Linear(768, 256) projection) yielded test AUC = **0.8126 ± 0.0164**
+> (Δ ≈ 0 vs baseline), revealing the per-entity-identifier short-input degenerate regime
+> that raw BERT `[CLS]` is poorly suited for (cf. Reimers & Gurevych 2019 / SimCSE).
+> This null result motivated our entity-event-context input design.
+>
+> Switching to entity-event-context input (per node: first 5 participating events in the
+> K-hop time window, cleaner-processed and `[SEP]`-joined into a 50-150 token
+> sentence-level input) with attention-mask-weighted mean pooling yields test AUC =
+> **<Phase 11.2-β 实测填>** ± **<std 实测填>** (Δ = +**<gain 实测填>**), confirming that
+> BERT semantic features substantially augment HTGN when applied in the sentence-level
+> regime BERT was pretrained for. This three-row empirical decomposition isolates
+> the contributions of (a) heterogeneous attention + Option-C temporal residual + per-type
+> TGN memory (the 0.8144 random-feature baseline), (b) the identification of BERT's
+> short-input degenerate regime as a design pitfall (the [CLS] null result), and
+> (c) BERT cleaner-driven semantic features applied in the right input regime
+> (the +<gain> delta from entity-event-context).
 
-**占位符填充协议**：Phase 4 sanity AUC re-validation 跑完后（见上方 Phase 4 待办 :: "Phase 3 sanity AUC re-validation"），用 `data/checkpoint10_taskB_summary_bert.json::multi_seed_aggregate` 的实测 mean / std 数字替换三处 `<...实测填>` 占位；Δ = mean_bert - 0.8144。同时把 Δ 数字 round to 2 位小数后回写本条目（如 "Δ = +0.07"）。
+**占位符填充协议**：
+
+- **第一组 [CLS] 数字（已填，2026-05-06）**：Checkpoint 11.2 用 naive [CLS] 配置实测 4-seed mean=**0.8126** ± std=**0.0164**，已直接写进上方第二段。原始数据保留在 `data/checkpoint10_taskB_summary_bert.json`（**禁止覆盖**，作 Phase 12 ablation 对比基线）。
+- **第二组 β 数字（待 Checkpoint 11.2-β 实测填）**：等 entity-event-context + mean pool 修正方案跑完 4-seed，用 `data/checkpoint11_2_beta_summary.json::multi_seed_aggregate` 的实测 mean / std 数字替换上方三处 `<Phase 11.2-β 实测填>` / `<std 实测填>` / `<gain 实测填>` 占位；Δ = mean_β - 0.8144（round 2 位小数）。回写本条目同时更新 Δ 数字（如 "Δ = +0.05"）。
+- **如 β 实测后 Δ < 0.04 (lift 阈值未达)**：触发 Option γ 架构级 RFC，本论文措辞模板需重新审视——可能要从"BERT 集成成功"叙事改为"BERT 集成局限性 + 我们对 HTGN 改进方向"叙事。Phase 12 写论文前必须看 Checkpoint 11.2-β 实测结果决定走哪个叙事。
 
 **论文叙事框架**（解释为什么这一段是 contribution 而非 limitation）：
 
@@ -270,6 +290,22 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 - [ ] Δ 数字是否 ≥ +0.05（如 < 0.05 说明 BERT 贡献小，叙事重心需调整）
 - [ ] 是否引用 `docs/known_issues.md::Phase 3 设计偏离记录::Task B AUC 0.825 borderline conditional pass` 作为 audit trail 锚点
 - [ ] 是否在 Limitation 章节同步说明 conditional pass 的工程过程（user 说 "诚实保留缺口而非掩盖" 是研究工程范例）
+
+### Phase 4 入口 BERT 集成 root-cause investigation 与诊断协议（2026-05-06，Checkpoint 11.2 lesson 标准范式）
+
+**触发场景**：Phase 3 conditional pass 把 sanity AUC re-validation 推到 Phase 4 入口（Phase 4 待办子节）。Checkpoint 11.2 第一次实施用 naive BERT 集成方案（frozen BERT [CLS] of `"<type> <id>"` per-entity short text + learnable Linear(768, 256) projection），4-seed 测得 AUC = 0.8126 ± 0.0164 vs Phase 3 baseline 0.8144 ± 0.0068，**Δ ≈ 0**——BERT 集成未带来正向贡献。User 三档处理协议要求 AUC < 0.85 → STOP + root-cause investigation。
+
+**三层排查协议**（agent-driven，作为 Methods 章节"我们如何诊断 BERT 集成失败"段落素材）：
+
+1. **第一层：节点身份纯度**——发现 K-hop 子图 1956 file 节点中 27.3% 是 hex handle (`0x4b0` 等无 path 信息) 而非真路径。Root cause：`src/loghetero/data/parsers/atlas.py:283` 的 `obj_name = fields.get("Object Name") or fields.get("Handle ID")` fallback 在 ATLAS 部分 security event 缺 Object Name 时退化为 handle ID。**判断**：partial degenerate 是 contributing factor 但不是主因——剩余 72.7% file 节点有真路径仍未带来正向贡献。
+2. **第二层：BERT [CLS] 对 short input 的 representation quality**——SimCSE / BERT-flow 文献指出 raw BERT [CLS] 在 short input (<10 token) 上是 isotropic 退化的，per-entity identifier 输入正好落在这个 BERT 没被验证过的 use case 区间。Phase 2 / Checkpoint 6 sanity check 验证 BERT 在 cleaned event sentence (50-200 token) 上 cos-sim 0.97-1.00 表现强；per-entity identifier (2-6 token) 是完全不同 regime，**用 Phase 2 验证过的 encoder 但用在了它没被验证过的 use case 上**——这是真正的主因。
+3. **第三层：integration code correctness**——`scripts/checkpoint10_task_b.py::_compute_bert_features` + `BertFeatureProjection` wiring verified 无 bug：frozen BERT、batched encoding、shared learnable Linear projection 在 optimizer。**排除 code bug 是 contributing factor**。
+
+**修正方案（Option β，Checkpoint 11.2-β 实施）**：把 per-node 输入从 entity-identifier 升级为 entity-event-context（取节点参与的前 5 个事件 cleaned text 拼接，~50-150 token，落回 Phase 2 sanity 验证过的 BERT sentence-level regime）+ 把 pooling 从 [CLS] 切换为 attention-mask-weighted mean pooling。BERT 保持完全冻结（Phase 1 工程不变量）。
+
+**Phase 12 Methods 章节素材完整性**：本三层排查 + 修正方案是 "我们的工程严谨性" 的具体证据。论文写作时这一段比纯理论 motivation 更有说服力——审稿人可以看到具体诊断过程而非"我们设计了一个系统它工作了"的黑盒陈述。可对照写作 hook：cf. Reimers & Gurevych 2019 (Sentence-BERT) 也有类似"naive BERT 不适合 sentence embedding 我们改 mean pool"的诊断叙事，但他们没有在系统级安全检测语境下做。
+
+**对应数据**：[CLS] failed attempt baseline 保留在 `data/checkpoint10_taskB_summary_bert.json` 作 Phase 12 ablation 对比基线（**禁止覆盖**）；β 修正方案结果落 `data/checkpoint11_2_beta_summary.json`。Phase 12 论文素材"Phase 3 sanity AUC 演进数字"子节的措辞模板对应 3 行表格：`(Phase 3 random Gaussian baseline) / (naive [CLS] entity-identifier) / (entity-event-context + mean pool)`。
 
 ### Contribution-boundary 设计原则（2026-05-05，Checkpoint 8 lesson）
 
@@ -354,6 +390,26 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 如果第二步分支决策走到 batch=16 兜底，需在 PROGRESS.md / CHECKPOINT 11 报告中显式记录"Phase 7 batch size = 16（实测显存约束所致），与 Checkpoint 9 launch spec batch=32 假设差异；对训练稳定性影响在 Phase 11 ablation 中校核"。
 
+### Mixed-vs-benign quick A/B 前置测试（2026-05-06，Checkpoint 11.1 RFC Option B 条件 3 触发）
+
+**触发原因**：Checkpoint 11.1 RFC 决议 Option B（Phase 4 用 mixed 数据），benign-only pretraining 推到 Phase 7 实施。User 强制 Phase 7 启动前**必须先做 mixed-vs-benign quick A/B 测试**，不允许 Phase 7 直接用 mixed 数据跑全量预训练。
+
+**Phase 7 第一个 sub-checkpoint 强制议程**（hard gate，禁止省略）：
+
+1. **数据子集**：ATLAS 一个小子集（如 S1 + M1 两个 scenario，共 3 个 (host, window) 子图），用 `AtlasGroundTruthLabelLoader`（Phase 8 待办成果，Phase 7 启动前必须完成）切两组：
+   - Group A: mixed 数据（不过滤）
+   - Group B: benign-only 数据（filter 掉所有 ATLAS ground-truth 标记的 attack 事件）
+2. **mini pretraining**：用 Phase 4 跨模态融合架构（HTGN + BERT + cross-attention + 改造 MLM）跑 5-10 epoch 的 mini pretraining，分别用 Group A 与 Group B 数据。
+3. **双指标对比**：
+   - **Perplexity**（MLM 任务的 loss-derived 指标，pretrain quality 直接代理）
+   - **下游 link prediction AUC**（用 mini pretrained representation freeze 后跑同 Checkpoint 10 Task B 协议，对比 mixed-pretrained vs benign-pretrained 的 AUC 差距）
+4. **决策**：
+   - 如 mixed vs benign 在 perplexity 上差 > 5% **OR** 在 link prediction AUC 上差 > 3pp → **Phase 7 全量预训练改用 benign-only 数据**，不延续 Phase 4 的 mixed 配置；同时回头标 Checkpoint 11.1 RFC Option B 决议为 "post-verification: mixed had material impact, switched to benign-only at Phase 7"。
+   - 如 mixed vs benign 差距 < 上述阈值 → Phase 7 全量预训练用 mixed 数据（与 Phase 4 配置一致），benign-only 保留作为 Phase 11 ablation 对照。
+5. **报告与落档**：Phase 7 第一个 sub-checkpoint 报告必须含 mini pretraining loss 曲线 + 双指标对比表 + 决议结果，落 commit 进 git。
+
+**禁止动作**：在没跑 quick A/B 测试的情况下直接启动 Phase 7 全量预训练（不论选 mixed 还是 benign）。这条 sanity gate 是 Checkpoint 11.1 RFC Option B 的 落地保障，不是建议而是硬纪律。
+
 ## Phase 8 待办
 
 - **`AtlasGroundTruthLabelLoader` 实现**（2026-05-05 标记，由 Checkpoint 5 引发）。当前 `src/loghetero/data/datamodule.py::benign_only_label_loader` 是 Phase 1.6 stub（所有 event 返回 0），Phase 8 finetune_anomaly mode 需要真实标签。实施步骤：
@@ -361,6 +417,29 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
   2. 实现 `src/loghetero/data/label_loaders.py::AtlasGroundTruthLabelLoader`：构造时加载所有 scenario 的攻击实体集，`__call__(event)` 返回 1 if `event.subject ∈ entities or event.obj ∈ entities` else 0。
   3. DataModule 构造时通过 `label_loader=AtlasGroundTruthLabelLoader(scenarios=[...])` 替换 stub。
   4. 配套测试：fixture 含已知攻击实体 + 标签验证；fold stats 重新跑确认 attack count 列从 0 变成实际数字。
+
+## Phase 11 消融扩展
+
+### B7 — Pretraining 数据干净度对比（2026-05-06，Checkpoint 11.1 RFC Option B 条件 2 触发）
+
+**触发原因**：Checkpoint 11.1 RFC 决议 Option B 把 Phase 4 mixed 数据明确标注为 "unverified-impact baseline"。Phase 11 ablation 矩阵（v3 prompt §6 Phase 11）原本规划 B0-B6 围绕模型架构变量，**新增 B7 围绕数据干净度变量**。
+
+**B7 配置**：
+
+| Cell | Pretraining 数据 | 模型架构 | 备注 |
+|---|---|---|---|
+| **B0** | mixed（Phase 4 / 7 实际配置）| 完整 HTGN + BERT + cross-attention + 改造 MLM | 主 baseline |
+| **B7-α** | benign_only_ground_truth（用 `AtlasGroundTruthLabelLoader` 切真 benign）| 同 B0 | 必须做（**hard requirement，禁止省略**）|
+| **B7-β** | benign_only_paper_timeline（论文 timeline 启发式切分；Phase 11 时间允许时加）| 同 B0 | 时间允许加（Soft requirement）|
+
+**对比指标**：Phase 8 anomaly detection F1（不仅看 pretraining perplexity，因为 perplexity 可能不反映 attack-as-normal 污染对下游的实际影响）+ Phase 8 anomaly detection AUC + 节点级 representation 可视化（t-SNE / UMAP 看 attack vs benign 节点 representation 是否在 mixed 训练后被错误聚到一起）。
+
+**论文叙事调整 trigger（决策 9 footnote 已规定）**：
+
+- 如 B0 vs B7-α 在 Phase 8 anomaly F1 上差异 **≤ 3pp** → mixed 数据假设成立，论文 Methods 章节按 mixed 数据写。
+- 如 差异 **> 3pp** → mixed 数据有实际污染，论文 Methods 章节**必须诚实说明 mixed 预训练带来的 representation 偏差并把 benign-only 作为推荐配置**。
+
+**实施时序**：B7 在 Phase 11 系统消融 sweeps 中作为额外一行运行，不允许跳过。Phase 11 实施 agent 必须读本条目作为 Phase 11 launch spec 的硬扩展项。
 
 ## Phase 12 待核实（写 related work 前必须 resolve）
 
