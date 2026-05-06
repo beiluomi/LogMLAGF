@@ -470,6 +470,51 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 **例外情况**：纯验证脚本（如 smoke test、ablation driver、benchmark 脚本）不需要走 4 步 pattern，因为这类脚本本身不是 "创新模块代码" 而是 "验证创新模块代码的工具"。verification 脚本走单 agent 实施 + 主 agent sanity check 即可。该例外的理由：spec / code quality 两类视角主要 catch "代码声称做 X 但实际做 Y" 这种创新模块语义偏差，而验证脚本的语义是"实测某 metric"——脚本跑通且 metric 数字与预期范围对齐就已经是自验证，再加一层 review 边际收益小于成本。
 
+### Checkpoint 13 perplexity 对比数字 fast-iter 加 Phase 7 full-scale 复验占位（2026-05-06，Checkpoint 13 收尾 Option C 三条件之 #2）
+
+**论文 Methods 章节段落措辞模板**（"4.x Modified MLM with field-level masking on fused hidden states" 段适配）：
+
+> Phase 4 / Checkpoint 13 implements modified MLM that predicts masked tokens
+> from post-fusion hidden states (CrossModalAttention output) rather than raw
+> BERT outputs. To validate that the fusion path is actually used, we compare
+> modified MLM against traditional token-level MLM (predicting from raw BERT
+> hidden states, no fusion) on the same M3_h2 first 1.0h window data, using
+> identical token-mask strategy and a 80/20 event-level holdout (4 seeds
+> [1, 7, 42, 100], 5 epochs, mean ± std reported).
+>
+> **Fast-iteration validation (Checkpoint 13)**: 500-event subsample, 5-epoch
+> training. Modified MLM perplexity 1.28 ± 0.04 vs Traditional MLM 1.31 ± 0.05
+> (per-seed modified [1.27, 1.23, 1.32, 1.28] vs traditional [1.30, 1.25, 1.37,
+> 1.34]); relative lift +2.9%, direction-consistent on 4 of 4 seeds. The margin
+> is modest but the direction-consistency under random seed perturbation
+> indicates a real small effect rather than noise.
+>
+> **Proper-scale validation (Phase 7, scheduled)**: full M3_h2 dataset (~74k
+> events, no subsample), 30+ epochs, 4 seeds, same two configurations. Numbers
+> placeholder until Phase 7 completion: `Modified MLM PPL <Phase7 mean> ±
+> <Phase7 std> vs Traditional MLM PPL <Phase7 mean> ± <Phase7 std>; relative
+> lift <Phase7 lift>%`. The relationship between the fast-iter and proper-scale
+> numbers is itself reported as evidence that fast-iter screening at Checkpoint
+> 13 was a reliable directional indicator (or, if Phase 7 numbers diverge, as
+> evidence that fast-iter regimes can mislead and proper-scale validation is
+> mandatory before paper claims).
+
+**透明 note 必须保留**：Checkpoint 13 是 fast-iter 限制规模 validation 不是 proper-scale test，规模差异（500 events × 5 epochs vs 74k events × 30+ epochs，约 900x 总训练量差）足够大以致 +2.9% direction-consistent 不能直接外推为 "modified MLM 在 proper-scale 训练下也保留这个 lift"。这种 scale 维度的诚实在 paper Methods 章节比掩盖更有 credibility，审稿人会 appreciate "我们在 fast-iter 与 proper-scale 两个 regime 都报告 + 标注差异"，而非 "我们只报告 fast-iter 数字隐瞒规模约束"。
+
+**Methods 章节图表建议**：可附 figure "Modified vs Traditional MLM perplexity at fast-iter (C13) and proper-scale (Phase 7)"，X 轴是两个 regime（fast-iter / proper-scale），Y 轴 PPL，2 条线（modified / traditional）+ error bar (std)，让 fast-iter direction-positive 与 proper-scale 实测 lift 在同一图里直观对比。
+
+**14.5 异常检测前置 probe 临界测试 caveat（Option C 条件 #3）**：
+
+Checkpoint 14.5 异常检测前置 probe 是创新点一融合机制效用的真正考验，**perplexity 与 anomaly F1 是不同任务上的不同诊断指标，任一为正都不能否定另一为负的诊断价值**。规避"perplexity 过了就不管 anomaly probe 失败"的潜在自我说服风险：如果 14.5 fusion F1 没过双条件门槛即 lift ≥ 0.03 加 paired t-test p < 0.1 或 BERT-only F1 接近或超过 fusion F1，**+2.9% perplexity direction-consistent 单独不构成可继续推进 Phase 5 的充分证据**，必须 RFC 重新评估融合架构。Phase 12 论文 Methods 章节如出现 14.5 anomaly probe null finding 而 perplexity direction-positive 的情形，论文叙事必须诚实报告"我们看到 perplexity 上有方向性改进但 anomaly detection 这一更直接的 task 上没有 lift，这意味着 fusion 机制对 token-level 重建有微弱帮助但对 anomaly classification 这一最终目标无帮助"——这种诚实是论文 credibility 的来源不是失分点。
+
+**Phase 12 写作时检查清单**：
+
+- [ ] Checkpoint 13 fast-iter 数字（1.28 vs 1.31, +2.9%, direction-consistent on 4/4）已填入 Methods 章节
+- [ ] Phase 7 proper-scale 数字（占位符 `<Phase7 mean>` etc.）已被 Phase 7 完成后实测数字替换
+- [ ] 透明 note 关于 fast-iter vs proper-scale scale 差异（约 900x 训练量）已写入 Methods 段落
+- [ ] 14.5 anomaly probe 与 perplexity 对比的关系（独立诊断信号互不否定）已写入 Methods 段落 + Discussion / Limitation 子节
+- [ ] Phase 7 大规模复验完成日期 + commit hash + 数字闭环标注已追加在本 Phase 12 论文素材子节末尾
+
 ## Phase 7 待办
 
 ### TGN msg_store 跨 batch 清理（2026-05-06，Checkpoint 9 发现）
@@ -588,6 +633,29 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 - 跑完后回头标 Checkpoint 11.2-γ-1 决议条目 "Phase 7 A/B verification 完成日期 + commit hash + B1 vs A1 / B2 vs A2 实测 lift 数字" 闭环
 
 **Phase 12 论文叙事 hook**：如 Phase 7 A/B 显示 BERT-fused-attention 在 anomaly detection 上确实有显著 lift，论文 Methods 章节就有了 "我们诚实排除 BERT 集成在 link prediction 上无效 + 验证 BERT 集成在 anomaly detection 上显著有效" 这条完整决策链；如 Phase 7 A/B 也显示 null finding，论文叙事重心要从"跨模态融合是创新点 1 的核心贡献"调整为"我们发现 BERT 跨模态融合在 provenance graph anomaly detection 上的边际贡献有限，主创新转向 HTGN 异构时序图编码 + RAPA-GTCL 攻击模板增强"——后一种叙事虽然弱化创新点 1 但保留了创新点 2 的完整性。
+
+### Checkpoint 13 perplexity re-validation at full scale（2026-05-06，Checkpoint 13 收尾 Option C 三条件之 #1）
+
+**触发原因**：Checkpoint 13 perplexity 对比在 fast-iter 配置（500-event cap、5 epoch、4 seed）下测得 modified MLM 1.28 ± 0.04 vs traditional MLM 1.31 ± 0.05，relative lift +2.9% direction-consistent on 4/4 seeds，hypothesis-direction-positive 但 margin modest 不能称"显著低于"强信号。User RFC Option C 决议（2026-05-06）接受 modest signal 推进 Phase 4 收尾验证序列，但要求 Phase 7 启动时必须做 proper-scale 复验避免 fast-iter regime 限制造成的 lift 数字外推到 proper-scale 时失真。
+
+**proper-scale re-validation 协议**（与 Checkpoint 13 driver 配置完全一致仅放大规模）：
+
+| 维度 | Checkpoint 13 fast-iter | **Phase 7 proper-scale 复验** |
+|---|---|---|
+| 数据源 | M3_h2 first 1.0h window 500-event subsample | **M3_h2 first 1.0h window 全量 ~74,000 events 不做 subsample** |
+| 训练 epochs | 5 | **30+** |
+| 4 seed | [1, 7, 42, 100] | [1, 7, 42, 100] 一致 |
+| 80/20 切分 | event-level | event-level 一致 |
+| 两 configurations | modified MLM (fused) vs traditional MLM (raw BERT) | 完全一致 |
+| 报告内容 | 绝对 PPL 加相对 lift 加 std 加 per-seed | 完全一致 |
+
+**实施位置**：Phase 7 联合预训练 launch spec 落定后，作为 Phase 7 待办的一项前置或并行任务。建议 commit message 前缀 `feat(phase7): Checkpoint 13 perplexity re-validation at full scale`。
+
+**实施完成后回头闭环标注**：本待办条目末尾追加 "Phase 7 复验完成日期 + commit hash + Phase 7 实测 modified MLM PPL ± std + traditional MLM PPL ± std + 相对 lift 数字 + Checkpoint 13 fast-iter 数字 vs Phase 7 proper-scale 数字的关系（一致 / fast-iter 高估 / fast-iter 低估）"。同时同步 `docs/known_issues.md::Phase 12 论文素材::Checkpoint 13 perplexity 对比数字 fast-iter 加 Phase 7 full-scale 复验占位` 子节中的 `<Phase7 mean>` 等占位符。
+
+**Phase 12 论文叙事 hook**：如 Phase 7 复验显示 modified MLM 仍方向性低于 traditional MLM 且 margin 有意义扩大（建议阈值 >5%），论文 Methods 章节有"fast-iter 验证给出方向性预测，proper-scale 验证 confirm 并扩大 margin"完整证据链；如 Phase 7 复验显示 modified MLM ≈ traditional MLM（margin 缩到 ≤1%）或反向，触发 informational null finding 协议（cf. Phase 4 待办::Phase 3 sanity AUC re-validation 处理范式），论文 Methods 章节诚实报告"我们在 fast-iter 上看到 +2.9% direction-positive 但 proper-scale 上消失，这是 fast-iter regime 不可外推到 proper-scale 的方法论 lesson"——这种诚实在论文 reproducibility & methodology 子节是 contribution 不是失分点。
+
+**为何不在 Checkpoint 13 内扩 budget 跑 proper-scale**：Phase 4 launch spec 把 Phase 4 框定为 integration phase，AUC-style 单点验证关卡撤销，深层验证留 Phase 7-8 anomaly detection 阶段。当下扩 budget 重跑全量 74k events 拖延 Checkpoint 14 / 14.5 一到两天换取并非关键决策点 metric 的边际额外置信度，ROI 偏低。Phase 7 联合预训练阶段必然要在该数据上跑大规模训练，proper-scale perplexity 复验天然搭车 Phase 7 训练流程不增加额外工时。
 
 ## Phase 8 待办
 
