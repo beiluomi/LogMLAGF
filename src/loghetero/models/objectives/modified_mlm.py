@@ -35,12 +35,12 @@ predicts a *representative* token for the deleted field at the surviving
 
 **添加 = Operation C — DEFERRED to Phase 5+ (NOT implemented here)**
 
-  Checkpoint 13 实施替换与删除两种字段级 mask 操作，添加机制延迟到 Phase 5+ 与
+  Checkpoint 13 实施替换与删除两种字段级 mask 操作,添加机制延迟到 Phase 5+ 与
   RAPA 攻击模板实施时一起做。理由是攻击模板本身的语义就是"向良性事件序列中注入
-  虚假/异常 field 或 event"，与 RAPA-GTCL 的合成攻击逻辑天然耦合，Phase 5 实施时
+  虚假/异常 field 或 event",与 RAPA-GTCL 的合成攻击逻辑天然耦合,Phase 5 实施时
   复用同一注入框架比 Checkpoint 13 单独造一个轻量添加机制更工程一致也更符合论文叙
   事。Phase 4 launch spec 的"目标字段替换/删除/添加机制"三件事在 Phase 4 完成
-  两件，第三件在 Phase 5 完成不构成 spec 偏离。
+  两件,第三件在 Phase 5 完成不构成 spec 偏离。
 
   The Phase 5 待办 entry is committed in ``docs/known_issues.md`` at
   Checkpoint 13 (commit 1e62fab-era).
@@ -89,13 +89,10 @@ need it so the module stays importable in the no-ML lint environment.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 from torch import nn
-
-if TYPE_CHECKING:
-    pass
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -564,7 +561,7 @@ class ModifiedMLMHead(nn.Module):
     given ``[MASK]`` token.  This satisfies sanity check #1.
 
     Architecture (matching standard BERT LM head):
-        LayerNorm(hidden_dim) → GELU → Linear(hidden_dim, vocab_size)
+        Linear(hidden_dim, hidden_dim) → GELU → LayerNorm(hidden_dim) → Linear(hidden_dim, vocab_size)
 
     The GELU + LayerNorm transform is consistent with BERT's MLM head
     (``BertOnlyMLMHead`` in HuggingFace Transformers) and ensures that
@@ -587,6 +584,7 @@ class ModifiedMLMHead(nn.Module):
 
         # Match BERT's MLM head: dense → GELU → norm → decoder.
         self.dense = nn.Linear(hidden_dim, hidden_dim)
+        self.gelu = nn.GELU()
         self.layer_norm = nn.LayerNorm(hidden_dim)
         self.decoder = nn.Linear(hidden_dim, vocab_size)
 
@@ -601,8 +599,7 @@ class ModifiedMLMHead(nn.Module):
             ``(B, T, vocab_size)`` logits.
         """
         x = self.dense(hidden_states)
-        # GELU activation.
-        x = x * 0.5 * (1.0 + torch.erf(x / 1.4142135623730951))
+        x = self.gelu(x)
         x = self.layer_norm(x)
         return self.decoder(x)
 

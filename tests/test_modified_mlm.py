@@ -17,6 +17,7 @@ from __future__ import annotations
 import math
 
 import torch
+from torch import nn
 
 from loghetero.models.objectives.modified_mlm import (
     IGNORE_INDEX,
@@ -249,6 +250,7 @@ class TestBuildFieldLevelMask:
             ids, text, FAKE_TOK, n_fields_to_mask=1, delete_prob=0.0, rng=rng
         )
         masked_pos = out.input_ids == MASK_TOKEN_ID
+        assert masked_pos.any(), "test setup error: no masked tokens produced — fix fixture"
         if masked_pos.any():
             # Labels at masked positions should match the *original* ids.
             # We need to align by original sequence length.
@@ -264,6 +266,7 @@ class TestBuildFieldLevelMask:
         )
         # Check that at the anchor [MASK] position, label != IGNORE_INDEX.
         mask_pos = (out.input_ids == MASK_TOKEN_ID).nonzero(as_tuple=True)[0]
+        assert mask_pos.numel() > 0, "test setup error: no masked tokens produced — fix fixture"
         if mask_pos.numel() > 0:
             assert (
                 out.labels[mask_pos] != IGNORE_INDEX
@@ -278,6 +281,7 @@ class TestBuildFieldLevelMask:
             ids, text, FAKE_TOK, n_fields_to_mask=1, delete_prob=1.0, rng=rng
         )
         mask_pos = (out.input_ids == MASK_TOKEN_ID).nonzero(as_tuple=True)[0]
+        assert mask_pos.numel() > 0, "test setup error: no masked tokens produced — fix fixture"
         if mask_pos.numel() > 0:
             for pos in mask_pos.tolist():
                 assert (
@@ -536,9 +540,11 @@ class TestSingleHeadInvariant:
         # We check that the head's single decoder is shared (not two instances).
         assert logits_replace.shape[-1] == VOCAB_SIZE
         assert logits_delete.shape[-1] == VOCAB_SIZE
-        # The decoder weight data pointer is the same in both calls (trivially
-        # true since it's the same nn.Module instance, but this makes the intent explicit).
-        assert head.decoder.weight.data_ptr() == head.decoder.weight.data_ptr()
+        # Both ops route through the same decoder weight tensor (verified by gradient tests
+        # elsewhere in this class; the single-head invariant is also locked by
+        # test_head_parameter_set_is_single).
+        n_linear = sum(1 for m in head.modules() if isinstance(m, nn.Linear))
+        assert n_linear == 2, f"Expected 2 Linear (dense + decoder), got {n_linear}"
 
     def test_no_separate_op_routing(self) -> None:
         """The head must NOT have any attribute named after operation types."""

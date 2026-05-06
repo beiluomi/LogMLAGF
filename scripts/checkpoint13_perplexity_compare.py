@@ -70,6 +70,8 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
+from loghetero.models.objectives.modified_mlm import BERT_HIDDEN_DIM  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Constants (must match checkpoint10_task_b.py / checkpoint12_real_data_smoke.py)
 # ---------------------------------------------------------------------------
@@ -92,7 +94,6 @@ BERT_MAX_LENGTH = 128  # per-event text; shorter than smoke12 (192) to keep
 # batch processing fast; 128 tokens is sufficient for most event_to_text outputs.
 
 # CrossModalAttention constants (locked per Phase 4 launch spec)
-TEXT_DIM = 768
 GRAPH_DIM = 256
 ATTN_DIM = 256
 ATTN_HEADS = 8
@@ -375,39 +376,28 @@ def _apply_token_mask(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Apply token-level masking to a padded batch.
 
+    Delegates per-sample masking to ``build_token_level_mask`` from the module
+    (module utility is per-sample only; batched iteration is kept here and will
+    be refactored when the module gains a batched API).
+
     Returns:
         masked_ids: (B, T) with MASK_TOKEN_ID at masked positions.
         labels: (B, T) with original ids at masked positions, -100 elsewhere.
     """
-    from loghetero.models.objectives.modified_mlm import (
-        CLS_TOKEN_ID,
-        IGNORE_INDEX,
-        MASK_TOKEN_ID,
-        PAD_TOKEN_ID,
-        SEP_TOKEN_ID,
-    )
+    from loghetero.models.objectives.modified_mlm import IGNORE_INDEX, build_token_level_mask
 
     b, t = token_ids.shape
-    special_ids = {CLS_TOKEN_ID, SEP_TOKEN_ID, PAD_TOKEN_ID}
-    eligible = torch.tensor(
-        [[int(token_ids[i, j].item()) not in special_ids for j in range(t)] for i in range(b)],
-        dtype=torch.bool,
-        device=token_ids.device,
-    )
-    rand_vals = torch.rand(
-        b, t, generator=rng, device=rng.device if hasattr(rng, "device") else token_ids.device
-    )
-    # Generator device issue: rand with generator must be on CPU; move if needed.
-    rand_vals = rand_vals.to(token_ids.device)
+    masked_rows: list[torch.Tensor] = []
+    label_rows: list[torch.Tensor] = []
+    for i in range(b):
+        out = build_token_level_mask(token_ids[i].cpu(), mask_prob=mask_prob, rng=rng)
+        masked_rows.append(out.input_ids)
+        label_rows.append(out.labels)
 
-    mask_positions = eligible & (rand_vals < mask_prob)
-
-    masked_ids = token_ids.clone()
-    masked_ids[mask_positions] = MASK_TOKEN_ID
-
-    labels = torch.full((b, t), IGNORE_INDEX, dtype=torch.long, device=token_ids.device)
-    labels[mask_positions] = token_ids[mask_positions]
-
+    masked_ids = torch.stack(masked_rows, dim=0).to(token_ids.device)
+    labels = torch.stack(label_rows, dim=0).to(token_ids.device)
+    # Ensure IGNORE_INDEX fill value at padding positions beyond original length.
+    _ = IGNORE_INDEX  # confirms import used; padding already handled by build_token_level_mask
     return masked_ids, labels
 
 
@@ -444,13 +434,13 @@ class ModifiedMLMConfig:
 
         torch.manual_seed(seed)
         self.cross_attn = CrossModalAttention(
-            text_dim=TEXT_DIM,
+            text_dim=BERT_HIDDEN_DIM,
             graph_dim=GRAPH_DIM,
             attn_dim=ATTN_DIM,
             num_heads=ATTN_HEADS,
             dropout=ATTN_DROPOUT,
         ).to(device)
-        self.head = ModifiedMLMHead(hidden_dim=TEXT_DIM).to(device)
+        self.head = ModifiedMLMHead(hidden_dim=BERT_HIDDEN_DIM).to(device)
         self.bert_model = bert_model
         self.graph_hidden = graph_hidden  # (1, N_total, 256)
         self.device = device
@@ -520,7 +510,7 @@ class TraditionalMLMConfig:
         from loghetero.models.objectives.modified_mlm import ModifiedMLMHead
 
         torch.manual_seed(seed)
-        self.head = ModifiedMLMHead(hidden_dim=TEXT_DIM).to(device)
+        self.head = ModifiedMLMHead(hidden_dim=BERT_HIDDEN_DIM).to(device)
         self.bert_model = bert_model
         self.device = device
 
@@ -590,7 +580,9 @@ def _run_one_seed(
 
     # Torch RNG for masking (same for both configs).
     mask_rng = torch.Generator()
-    mask_rng.manual_seed(seed + 31337)
+    mask_rng.manual_seed(
+        seed + 31337
+    )  # large fixed offset to decorrelate this RNG from the split RNG
 
     # Initialise both configs.
     mod_config = ModifiedMLMConfig(graph_hidden, bert_model, device, seed=seed)
@@ -599,7 +591,9 @@ def _run_one_seed(
     # Pre-build test batch with fixed masking (same mask for both configs).
     test_padded = _pad_batch(test_tokens)  # (N_test, T_max)
     test_mask_rng = torch.Generator()
-    test_mask_rng.manual_seed(seed + 99999)
+    test_mask_rng.manual_seed(
+        seed + 99999
+    )  # large fixed offset to decorrelate this RNG from the train mask RNG
     test_masked, test_labels = _apply_token_mask(test_padded, MASK_PROB, test_mask_rng)
 
     # Training loop (5 epochs, same batches for both configs).
