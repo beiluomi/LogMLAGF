@@ -499,4 +499,49 @@ Phase 3 跨 4 个 checkpoint（7-10）、~10 commits、~3000 行代码（HTGN �
 
 ---
 
-*下一条记录：Phase 4 / Checkpoint 12（双向跨模态注意力实施，subagent-driven-development pattern）。*
+## Checkpoint 12 — 双向跨模态注意力模块实施（subagent-driven-development pattern 首例）
+
+- **完成日期**：2026-05-06
+- **Commits**：`cfa4ec6`（主 commit：CrossModalAttention 模块 + build_event_attention_mask + 28 测试 + 案例研究脚本）+ `78c76ee`（review fixes：docstring 修正 + independence test 加严 + grad-norm 阈值 inline 注释）
+- **方法论**：subagent-driven-development skill 首次正式应用——controller (主 agent) 协调，dispatch implementer subagent → spec compliance reviewer subagent → code quality reviewer subagent → fix subagent 三轮验证。这是把 superpowers skills 体系并入项目研究工程纪律的首例落地。
+
+### 实现交付
+
+- **`src/loghetero/models/fusion/cross_attention.py`** (~317 行)：CrossModalAttention 单个双向跨模态注意力融合块，pre-LN 风格，两套独立 MultiheadAttention（tg_attn / gt_attn）+ 两套独立 output projection（tg_out_proj / gt_out_proj）+ 跨方向共享 input projections (text_proj / graph_proj) 与 LayerNorm（共享设计 docstring 中明确）。caller 在 Checkpoint 14 整体集成时实例化 4 份用于 BERT 第 3 / 6 / 9 / 12 层融合点。
+- **`build_event_attention_mask` utility**：strict same-event masking 实现，-1 sentinel 排除 -1==-1 false positive，optional padding mask override 支持，phase 5+ 放宽是单点 utility 修改。
+- **`tests/test_cross_attention.py`**（28 测试 / 5 类全覆盖）：shape (8) / mask utility (9) / mask honored in forward (2) / gradient flow 三套参数全非零 (5) / parameter independence (4)。test_independent_params_diverge_after_update 已 fix 为 `tg_changed and not gt_changed` 严测，能 catch aliased tensor bug。
+- **`notebooks/checkpoint12_attention_case_study.py`**：synthetic case study 脚本验证 mask sanity——100% attention weight 落在 same-event graph nodes，0.000000 落在 cross-event nodes；attention entropy ≈ ln(5) = 1.609 nats（5 个 same-event graph nodes 均匀注意）。
+
+### subagent-driven-development workflow 三轮验证
+
+1. **Implementer dispatch**（Sonnet model）→ commit cfa4ec6（DONE 28/28，三处自标 self-review notes：input projection 共享 / grad norm 阈值 1e3→1e6 / NaN guard）
+2. **Spec compliance review**（Sonnet model）→ ⚠️ Compliant with caveats，无 MUST_FIX，三处 implementer self-flag 全部得到 reasoned verdict（input projection 共享 acceptable interpretation 但 docstring 需修正 / grad norm 阈值数学合理 / NaN guard 正确性必需）
+3. **Code quality review**（Sonnet model）→ Approved with minor fixes，2 Important + 4 Minor。Important 1：模块 docstring 与实现矛盾（line 21-22 写 "no sharing" 但实际共享 input projections）；Important 2：test_independent_params_diverge_after_update 断言 `tg_changed or gt_changed` 是 tautological（loss 只走 tg 路径，gt 永远 False，aliasing 不会被捕获）。
+4. **Fix dispatch**（Sonnet model）→ commit 78c76ee 应用三处修复（docstring 改写为 accurate description with rationale / 测试断言改为 `tg_changed and not gt_changed` 含 aliasing-detection 注释 / 三处 1e6 grad norm 阈值加 inline comment 说明 .sum() loss scale 推算）
+5. **Final verification**：28/28 测试 + ruff + mypy + 全 suite 204 passed 1 skipped pre-existing 0 fail
+
+### 决策点
+
+- **共享 input projections 设计选择**（implementer 自标 + spec reviewer 判 acceptable + code quality reviewer 判 docstring 需修正后 approved）：text_proj (768→256) 与 graph_proj (256→256) 跨两个方向共享，单一 linear projection 是 direction-agnostic 的，加 per-direction projection 不会赋予 attention 路径任何 tg_attn / gt_attn 不能学到的方向性能力，参数效率提升约 30%。Phase 7 ablation 可以 reconsider：如果 tg / gt 两条路径发展出 conflicting gradient signals，per-direction input projection 可一行代码 unshare。该设计选择已在模块 docstring (line 21-29) 明确记录含 rationale 与 Phase 7 reconsideration 钩子。
+- **测试 tautological 断言修复**（code quality review 第二轮发现）：原断言 `tg_changed or gt_changed` 在 loss = fused_text.sum() (text path only) 下 gt_changed 必然 False，化简为 `tg_changed`，aliased tensor 仍能 trivially pass。修复为 `tg_changed and not gt_changed`：aliased tensor 会让 gt_changed=True 与 tg_changed 一同变化，断言 fail，正确捕获 bug。这一修复体现了 code quality review 在 spec review 之外的真实价值——spec review 看 "实现是否符合规范"，code quality review 看 "测试是否真验证了规范"。
+- **subagent-driven-development pattern 项目首例落地**：三轮 reviewer 验证 + fix 循环确实 catch 到 spec review 第一轮 miss 的两处 Important 问题。验证流水线 implementer → spec reviewer → code quality reviewer → fix 在本次 ~25 分钟内完成；放在传统单 agent 实施下这两处 Important 问题大概率会带进 Checkpoint 14 集成才被发现，造成回头修改的额外成本。该方法论确立为 Phase 4 后续 sub-checkpoint (13 / 14 / 14.5) 标准实施路径。
+
+### 执行 Checkpoint 12 launch spec 完成清单
+
+- [x] CrossModalAttention 模块实现（双向独立 MHA + output projection / 共享 input projection 含 docstring rationale）
+- [x] build_event_attention_mask utility（strict same-event masking + -1 sentinel handling + padding override）
+- [x] forward shape 测试通过（B=4 / T=32 / N=64 默认 dim 全部正确）
+- [x] attention 权重在具体 case 上的可视化（notebooks/checkpoint12_attention_case_study.py 输出 100% same-event mass + entropy ≈ ln(5)）
+- [x] 端到端梯度回传 sanity（三套参数 input projection / cross-attention QKV / output projection 全部非零梯度，norms finite + not NaN，4 seed 测试稳定）
+- [x] 模块 docstring 准确描述参数共享/独立分布（fix #1 修正初版 false statement）
+- [x] 独立性测试改为严测（fix #2 改 `or` → `and not` 能 catch aliasing bug）
+- [x] grad norm 阈值 inline 注释说明 .sum() loss 量级推算（fix #3）
+- [x] PROGRESS.md / CHECKPOINT_LOG.md 同步更新
+
+### 下一步
+
+Checkpoint 13（改造 MLM 任务集成，预计 2 天）：字段级 mask 任务（替换 / 删除 / 添加）+ 融合后隐藏状态预测 mask token + 与传统 MLM perplexity 对比验证。仍走 implementer → spec reviewer → code quality reviewer 三轮验证 pattern。
+
+---
+
+*下一条记录：Phase 4 / Checkpoint 13（改造 MLM 任务集成）。*

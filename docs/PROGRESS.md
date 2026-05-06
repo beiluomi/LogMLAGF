@@ -6,15 +6,15 @@
 
 ## 1. 项目当前阶段与 Checkpoint
 
-- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **进行中（1/4 sub-checkpoints 已完成）**
-- **最新 Checkpoint**：Checkpoint 11（Phase 4 入口前置 RFC + Phase 3 sanity AUC re-validation）— 已通过（**informationally complete**，详见下方 §4 决策清单与 §6 active 待回答问题章节）
-- **Phase 4 进度**：Checkpoint 11（前置 RFC 消化 + 11.1 Option B benign-only 决议 + 11.2-γ-1 BERT informational null finding）已 done。下一个：Checkpoint 12（双向跨模态注意力实施）→ Checkpoint 13（改造 MLM 集成）→ Checkpoint 14（端到端集成 + smoke test）→ tag `v0.4-fusion`。
+- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **进行中（2/5 sub-checkpoints 已完成；Phase 4 launch spec 严谨化升级版后总数为 5：11 / 12 / 13 / 14 / 14.5）**
+- **最新 Checkpoint**：Checkpoint 12（双向跨模态注意力模块实施）— 已通过（28/28 单元测试 + ruff + mypy + 全 suite 204 passed；spec review ⚠️ compliant 无 MUST_FIX；code quality review approved with minor fixes 已应用）
+- **Phase 4 进度**：Checkpoint 11（前置 RFC 消化 + 11.1 Option B benign-only 决议 + 11.2-γ-1 BERT informational null finding）+ Checkpoint 12（CrossModalAttention 模块 + build_event_attention_mask utility + 28 单元测试 + 案例研究脚本）已 done。下一个：Checkpoint 13（改造 MLM 集成）→ Checkpoint 14（七项 gate 验证）→ Checkpoint 14.5（异常检测前置 probe）→ tag `v0.4-fusion`。
 - **已完成 Phase**：Phase 0（tag `v0.0-scaffold`）+ Phase 1（tag `v0.1-data`）+ Phase 2（tag `v0.2-bert`）+ Phase 3（tag `v0.3-htgn`，conditional pass 后变更为 informationally complete via Checkpoint 11.2-γ-1）
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：（本 commit，docs-only Phase 4 launch spec 严谨化补丁；前置 Checkpoint 11 commit 为 `c9796a8` 含 11.2-γ-1 决议 + 4 ablation artifacts + 决策 4.2 footnote + PROGRESS / CHECKPOINT_LOG 同步；Checkpoint 11.1 Option B 三条件 docs 在 `cae7216` 落档；本 commit 是 Phase 4 主体启动前的 docs-only 措辞收紧 + Phase 12 论文素材边界条件 note + 下一步计划扩展同步）
-- **Message**：`docs(constitution): tighten link prediction task characterization (structure-dominated not structure-determined)`
+- **Hash**：`78c76ee`（Checkpoint 12 review fixes commit；前置 Checkpoint 12 主 commit 为 `cfa4ec6` CrossModalAttention 模块 + 28 测试；前置 docs commit `ce67209` Phase 4 launch spec 严谨化补丁；Checkpoint 11 commits 为 `c9796a8` γ-1 决议 + `cae7216` 11.1 Option B 三条件）
+- **Message**：`fix(fusion): Phase 4 / Checkpoint 12 review fixes (docstring + independence test + grad-norm comment)`
 - **Date**：2026-05-06
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
@@ -49,7 +49,9 @@
 | 26 | `cae7216` | docs / checkpoint 11.1 | docs(constitution): Checkpoint 11.1 Option B with three conditions + Phase 12 BERT root-cause investigation entry |
 | 27 | `c9796a8` | checkpoint 11.2-γ-1 | feat(phase4): Phase 4 / Checkpoint 11 RFC resolution + sanity null finding (γ-1) |
 | 28 | `9f9ab17` | docs / handoff | docs(handoff): add 2026-05-06 session switch marker for next-window onboarding |
-| 29 | `<this commit>` | docs / Phase 4 launch prep | docs(constitution): tighten link prediction task characterization (structure-dominated not structure-determined) |
+| 29 | `ce67209` | docs / Phase 4 launch prep | docs(constitution): tighten link prediction task characterization (structure-dominated not structure-determined) |
+| 30 | `cfa4ec6` | checkpoint 12 | feat(fusion): Phase 4 / Checkpoint 12 bidirectional cross-modal attention module |
+| 31 | `<this commit>` | checkpoint 12 fix | fix(fusion): Phase 4 / Checkpoint 12 review fixes (docstring + independence test + grad-norm comment) |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 / Phase 4 设计偏离 + 经验启发式校准）
 
