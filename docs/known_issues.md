@@ -30,6 +30,35 @@
 - **后续阶段适用范围**：剩余九个 phase 还会出现"代码现实领先于 launch spec"的常数 drift（典型场景：节点类型从 5 类扩到 6 类、156 个 special token 调整、20 个 RAPA 模板增减、7 个 SOTA 基线变化等）。**所有此类 drift 必须显式 RFC 而非 silent 跟随**——同步动作四处一致（代码 / 测试 / config / docs）+ commit message 显式记录是标准范式。
 - **判定原则**："代码即真相"（code as ground truth），spec 是意图陈述但代码常数随实施演化。Drift 不是问题，silent drift 才是问题。
 
+### Smoke test 阈值设计必须显式考虑 loss reduction 与 N 的交互（2026-05-06，Checkpoint 12 real-data smoke test lesson）
+
+**现象**：Checkpoint 12 real-data smoke test launch spec 写 "grad norm 必须落 [1e-7, 1e3]" 作为真实数据数值健康验证的紧门槛。首次跑 6 个参数中 4 个超 1e3，最高的 `text_proj.weight` 达 1.151e+05（超界 100x）。架构层面 NaN/Inf clean、VRAM 0.421 GB、forward+backward 2.5 ms 全部健康——架构没问题，spec 阈值有问题。
+
+**根因（controlled experiment 钉死）**：smoke test 与 unit test 用相同的 `loss = fused_text.sum() + fused_graph.sum()` sum reduction loss，但 unit test N=16，smoke test 真实数据 N=2000。sum reduction 让 grad norm 与 N 线性耦合：N 从 16 升到 2000 是 125x 放大；实测 unit test 落 [1e2, 1.4e3]、smoke test 落 [4e3, 1.2e5] 完全吻合 125x scaling 预测。原 [1e-7, 1e3] 阈值在写时假设了 grad norm 与 N 无关，是真实的 scale-naive 错误。
+
+**修正方案（RFC Option B 选用，标准范式）**：smoke test 改用 mean reduction `loss = fused_text.mean() + fused_graph.mean()`。mean = sum / N 让 grad norm 在 N 变化下基本恒定，spec 写的 [1e-7, 1e3] 紧门槛得以保留作为真实数值健康验证。修订后 6 个参数 grad norm 全部落 [0.11, 0.22] 健康量级。
+
+**为何不选 cap-around**：
+
+- **Option A**：放宽 smoke test 阈值到 [1e-7, 1e5]——cap-around 没解决根本问题，将来 batch / N 改变又得重调；阈值随 N 变化的隐性约束没解耦。
+- **Option C**：smoke test 限 N=128 不用真实 max_nodes=2000——背离 "真实数据 regime smoke test" 本意，跟 unit test 区别不大。
+- **Option B（选用）**：mean reduction 修根因（loss formulation 的 N-coupling 是 scale-naive 的），保留紧门槛，符合 ML 训练 convention 主流。
+
+**smoke test 与 unit test loss formulation 不一致是合理的**：
+
+- Unit test 用 sum reduction + 宽松 [1e-8, 1e6] 阈值：测合成 tensor shape 与 gradient flow，N 小（N=16 / 64）量级 sum 能 cover 自然 sqrt(B*T*D)-scaled 范围；用 mean 反而失去对极小梯度的检测灵敏度。
+- Smoke test 用 mean reduction + 紧 [1e-7, 1e3] 阈值：测真实数据数值健康，N 大（N=2000）必须解耦 N，紧阈值有意义；用 sum 阈值就被 N-scaling 污染。
+- **两个测试目的不同，loss formulation 不同是设计选择不是失误**。脚本 docstring 显式说明该不一致，避免未来 agent 读到时疑惑或试图统一。
+
+**后续阶段适用范围（前置参考）**：
+
+1. **Phase 7-8 大规模训练阶段**写各种 sanity check 阈值时，**先确认 loss reduction 类型**：sum / mean / sum-over-active-token / batch-mean / element-mean 等不同 reduction 对 grad norm 量级的影响差几个数量级。
+2. **Phase 11 ablation matrix** 跑各种配置对比 grad norm 时统一用 mean reduction，避免不同配置 N 不同时数字不可比。
+3. **Phase 14.5 异常检测前置 probe**（已规划）的 fusion / HTGN-only / BERT-only 三配置对比训练若涉及 grad norm sanity，必须用 mean reduction 解耦三配置可能不同的有效 N。
+4. **Phase 4 / Checkpoint 14 七项 gate**第二项 "梯度三套全非零" 与第三项 "attention entropy ∈ [0.3, 0.95]" 在 batch=16 真实数据下，必须复用 smoke test 的 mean reduction 模式而非 sum，否则 batch=16 + N_real 的 grad norm 量级会偏离合理范围。
+
+**判定原则**："验证脚本阈值必须 N-invariant（mean reduction 或者显式 N 归一化），否则同一架构换样本规模就要改阈值——这是脆性 spec"。Phase 12 论文 Methods 章节如报告 sanity check 阈值，须显式说明 reduction 选择 + 为何选 mean，作为工程严谨性 evidence。
+
 
 
 - **"每 window 10–10000 events 的合理区间"启发式不适用于 LogHetero / 现代 HGT**（2026-05-05 标记，Checkpoint 4 数据后校准）。

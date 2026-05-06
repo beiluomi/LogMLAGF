@@ -7,7 +7,7 @@
 ## 1. 项目当前阶段与 Checkpoint
 
 - **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **进行中（2/5 sub-checkpoints 已完成；Phase 4 launch spec 严谨化升级版后总数为 5：11 / 12 / 13 / 14 / 14.5）**
-- **最新 Checkpoint**：Checkpoint 12（双向跨模态注意力模块实施）— 已通过（28/28 单元测试 + ruff + mypy + 全 suite 204 passed；spec review ⚠️ compliant 无 MUST_FIX；code quality review approved with minor fixes 已应用）
+- **最新 Checkpoint**：Checkpoint 12（双向跨模态注意力模块实施）— 已通过（28/28 单元测试 + ruff + mypy + 全 suite 204 passed；spec review ⚠️ compliant 无 MUST_FIX；code quality review approved with minor fixes 已应用）+ **真实数据 smoke test 已通过**（M3_h2 first 1.0h window K-hop subgraph N=2000，4 项验证 NaN/Inf clean / 6 个 grad norm 全部 [0.11, 0.22] 落 [1e-7, 1e3] / VRAM 0.421 GB / forward+backward 2.6 ms 全 PASS；mean reduction 修订 RFC Option B 应用）
 - **Phase 4 进度**：Checkpoint 11（前置 RFC 消化 + 11.1 Option B benign-only 决议 + 11.2-γ-1 BERT informational null finding）+ Checkpoint 12（CrossModalAttention 模块 + build_event_attention_mask utility + 28 单元测试 + 案例研究脚本）已 done。下一个：Checkpoint 13（改造 MLM 集成）→ Checkpoint 14（七项 gate 验证）→ Checkpoint 14.5（异常检测前置 probe）→ tag `v0.4-fusion`。
 - **已完成 Phase**：Phase 0（tag `v0.0-scaffold`）+ Phase 1（tag `v0.1-data`）+ Phase 2（tag `v0.2-bert`）+ Phase 3（tag `v0.3-htgn`，conditional pass 后变更为 informationally complete via Checkpoint 11.2-γ-1）
 
