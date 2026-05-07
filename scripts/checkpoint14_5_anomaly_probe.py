@@ -1,17 +1,103 @@
-"""Phase 4 / Checkpoint 14.5 anomaly detection probe -- three-config fusion engagement test.
+"""Phase 4 / Checkpoint 14.5 Path B' (final) -- full node-ID anonymization.
 
 PURPOSE
 =======
-Critical fusion engagement test under anomaly classification loss pressure
-(distinct loss structure from the MLM pressure in Checkpoint 14 alpha/alpha').
+Path B' is the FINAL refinement round for 14.5 protocol (hard stop after this
+run regardless of result -- no Path B'' allowed per user hard constraint).
+
+Path B' extends Path B (commit 7838ee8) by fixing the atk_N_ prefix leakage
+that caused BERT-only F1=1.000 in Path B despite TTP-suffix anonymization.
+
+Root cause (Path B failure):
+    Path B's ANONYMIZE_MAP replaced TTP-specific suffixes (powershell.exe ->
+    process_001, etc.) but left the atk_{N}_ prefix intact in BERT text.  BERT
+    saw tokens like "atk_0_process_001" vs benign "proc_3" -- the atk_ prefix
+    alone perfectly discriminated attack from benign at the token level.
+
+Path B' Change (atk_ prefix normalization + unified node-ID namespace):
+    _anonymize_token() now applies a two-phase strategy:
+
+    Phase 1: Apply ANONYMIZE_MAP (same as Path B, replaces TTP suffixes).
+    Phase 2: Apply full node-ID normalization to collapse BOTH attack and benign
+             node IDs into a single unified namespace so BERT cannot distinguish
+             them by any prefix, suffix, or substring pattern:
+
+             * atk_{N}_<anything>  -> strip atk_{N}_ prefix entirely, then
+               apply node-type normalization (phase 2b) to the remaining suffix.
+             * Any process name (proc_N, firefox.exe, svchost.exe, etc.) ->
+               the single token "proc_token"
+             * Any file path / name -> the single token "file_token"
+             * Any network address (IP:port, URL, domain) -> "net_token"
+             * Any user name -> "user_token"
+
+    This unified collapse is the ONLY design that satisfies the hard requirement:
+    "after anonymization, attack and benign node text representations must be
+    string-level indistinguishable by prefix or substring pattern."
+
+    Rationale for collapsing to single tokens (not numbered variants):
+    Numbered placeholders (process_001 for attack, proc_0 for benign) still
+    allow BERT to distinguish by suffix -- it would learn that process_NNN =
+    attack token and proc_N = benign token.  Collapsing to a single token per
+    node type removes all numeric discriminators.  The only remaining signal
+    in BERT text is: node_type, operation, and co-occurrence patterns across
+    events -- exactly the semantics we want to test.
+
+    Node-type normalization rules (applied after atk_ prefix strip):
+    - Process:  token ends in .exe OR matches proc_N OR process_N OR any
+                atk-suffix placeholder (process_001..process_008) -> "proc_token"
+    - File:     token ends in .ps1 / .dmp / .tmp / .txt / .db / .zip OR
+                starts with Registry OR matches file_N -> "file_token"
+    - Network:  token matches an IP:port pattern OR a URL pattern -> "net_token"
+    - User:     token matches victim_user or typical Windows domain/user
+                patterns -> "user_token"
+    - Fallback: token not matched by any rule -> unchanged (prevents silent
+                data loss; unknown token types are passed through verbatim so
+                the event text still makes syntactic sense to BERT).
+
+    Benign node ID forms enumerated from M3_h2 + synthetic fallback:
+    - Synthetic benign processes: proc_0 .. proc_19   -> proc_token
+    - Synthetic benign files: file_0.txt .. file_19.txt -> file_token
+    - Synthetic benign user: victim_user               -> user_token
+    - ATLAS firefox parser subject: firefox.exe        -> proc_token
+    - ATLAS DNS nodes: IPv4 addresses (192.168.x.x)   -> net_token
+    - ATLAS security_events process names: anything.exe -> proc_token
+
+    Attack node ID forms (atk_{N}_ prefix stripped first):
+    - T1059.001: cmd.exe, powershell.exe, powershell.exe_child -> proc_token
+                 payload.ps1 -> file_token; 185.234.219.11:4444 -> net_token
+    - T1003.001: mimikatz.exe, mimikatz.exe_elevated -> proc_token
+                 lsass.exe -> file_token (schema workaround); cred_dump.dmp -> file_token
+                 91.108.4.6:443 -> net_token
+    - T1071.001: implant.exe -> proc_token; beacon_response.tmp -> file_token
+                 192.168.1.2:53, 185.220.101.45:80 -> net_token
+    - T1547.001: dropper.exe, reg.exe, persisted_payload.exe -> proc_token
+                 Registry/Machine/.../Run -> file_token; 194.165.16.11:8080 -> net_token
+    - T1041:     exfil_tool.exe -> proc_token
+                 sensitive_data.db, archive.zip -> file_token
+                 45.142.212.100:443 -> net_token
+    - Bridge events (anchor_proc -> PROCESS_CREATE -> first_atk_process): both
+      subject (benign proc) and obj (attack proc) -> proc_token
+
+Two changes vs. first run (Path B), carried forward unchanged:
+
+  Change 2 (shared anchor node extension):
+    Each TTP chain now anchors on TWO benign nodes (seed=42, deterministic):
+    (1) the seed user node (event 1 subject, unchanged) and
+    (2) one benign process node that spawns the first atk_-prefixed process via a
+    bridging PROCESS_CREATE event.  This removes the "trivial graph isolation" that
+    produced HTGN-only F1=0.23 in the first 14.5 run.
 
 Runs 3 probe configs x 4 seeds x 30 epochs, then evaluates the DOUBLE-CONDITION
 GATE:
   1. Fusion vs HTGN-only mean F1 lift >= 0.03
   2. Paired t-test p < 0.1  (across 4 seeds, fusion vs HTGN-only)
-  3. Fusion - BERT-only mean F1 > 0.01  (fusion adds beyond BERT lexical recognition)
+  3. Fusion - BERT-only mean F1 > 0.01  (fusion adds beyond BERT text)
 
-Any condition fail -> STOP, report NEEDS_CONTEXT. Do NOT relax thresholds.
+Any condition fail -> STOP, report NEEDS_CONTEXT.  Do NOT relax thresholds.
+Result classification (pre-decided, locked):
+  Result A: all 3 gates pass -> Phase 4 closure path (commit after spec review)
+  Result B: fusion - BERT-only <= 0.01 -> architecture-level RFC (no commit)
+  Result C: BERT-only F1 < 0.5 AND fusion F1 < 0.5 -> protocol design failure
 
 PROTOCOL (RFC-14.5 adjudications, all locked):
   - 5 TTP templates x 100 attack events = 500 total attack
@@ -20,26 +106,25 @@ PROTOCOL (RFC-14.5 adjudications, all locked):
   - Three configs: HTGN-only (256-dim subject node), BERT-only (768-dim CLS),
     fusion (768-dim Phase4Model fused_text CLS)
   - MLP head: Linear(D,128) -> ReLU -> Dropout(0.1) -> Linear(128,1)
-  - 4 seeds: [42, 7, 1, 100]; per-TTP F1 informational; aggregate F1 for gate
+  - 4 seeds: [1, 7, 42, 100]; per-TTP F1 informational; aggregate F1 for gate
   - No external API calls (RFC-14.5-10)
 
 DATA PATH: M3_h2 first 1.0h window (consistent with C10/C11/C12/C13/C14).
            Falls back to all-synthetic if ATLAS data not available.
 
-BERT-only text format (RFC-14.5-3):
-    f"{subject_type} {subject} {operation} {obj_type} {obj}"
-    e.g.: "process powershell.exe file_write file payload.ps1"
-    No anonymization (RFC-14.5-6): lexical leakage intentional as Condition 3
-    diagnostic signal.
+BERT-only text format (RFC-14.5-3 + Path B' full anonymization):
+    f"{subject_type} {anon(subject)} {operation} {obj_type} {anon(obj)}"
+    e.g.: "process proc_token process_create process proc_token"
+    Both attack and benign node IDs collapse to the same token per node type.
+    No atk_ prefix, no TTP-specific suffix, no numeric discriminator remains.
 
 HTGN-only embedding (RFC-14.5-3 / RFC-14.5-5):
     Subject node's precomputed HTGN output embedding (256-dim).
-    Rationale: event-level prediction 用 subject node embedding 是因为 HTGN 异构
-    attention 已让 subject node 的 256-dim output 编码邻居 object 与 action 信息,
-    不需要显式 concat.
+    HTGN uses graph structure -- no text, no anonymization applied.
 
 Fusion config MLP input (RFC-14.5-3):
     fused_text[:, 0, :] (CLS token, 768-dim) from Phase4Model output.
+    Uses same anonymized text as BERT-only config.
 
 HTGN precomputed (RFC-14.5-5 Option B):
     Build one combined HeteroData (benign + injected attack), run HTGN once
@@ -52,6 +137,7 @@ EXEMPT from 4-step multi-agent review pattern per docs/known_issues.md
 from __future__ import annotations
 
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -93,15 +179,194 @@ TRAIN_RATIO = 0.8
 # Training
 EPOCHS = 30
 LR = 1e-3
-PROBE_SEEDS = [42, 7, 1, 100]
+PROBE_SEEDS = [1, 7, 42, 100]
 
 # Gate thresholds (locked, do NOT relax)
 GATE1_LIFT_THRESHOLD = 0.03  # fusion vs HTGN-only mean F1 lift
 GATE2_PVAL_THRESHOLD = 0.1  # paired t-test p < 0.1
 GATE3_DELTA_THRESHOLD = 0.01  # fusion - BERT-only mean F1
 
-# Text format (RFC-14.5-3): "{subject_type} {subject} {operation} {obj_type} {obj}"
-# No anonymization (RFC-14.5-6).
+# ---------------------------------------------------------------------------
+# Path B' ANONYMIZE_MAP + full node-ID normalization
+#
+# Applied ONLY to BERT input text rendering (subject/obj name substrings).
+# Graph node IDs are NOT changed -- only the text layer is anonymized.
+# Applied uniformly to BERT-only and fusion config inputs.
+# HTGN-only config has no text input; map is not applied.
+#
+# Path B' design (two-phase normalization):
+#
+# Phase 1 -- TTP-suffix substitution (same as Path B, kept for clarity /
+#   audit trail but superseded by Phase 2 which collapses all IDs further):
+#   Replace TTP-specific substrings with generic placeholders via ANONYMIZE_MAP.
+#
+# Phase 2 -- Full node-ID normalization (Path B' new addition):
+#   After suffix substitution, strip the atk_{N}_ prefix if present, then
+#   collapse the remaining token to a per-node-type canonical token:
+#     proc_token  -- all process IDs (attack AND benign)
+#     file_token  -- all file IDs (attack AND benign)
+#     net_token   -- all network IDs (attack AND benign)
+#     user_token  -- all user IDs (attack AND benign)
+#
+#   This collapse satisfies the hard requirement: "after anonymization, attack
+#   and benign node text representations must be string-level indistinguishable
+#   by prefix or substring pattern."  Numbered placeholders (process_001 for
+#   attack vs proc_0 for benign) would still allow BERT to distinguish attack
+#   from benign by suffix pattern; collapsing to a single token per type
+#   removes all numeric and name discriminators.
+#
+# Node-type classification rules applied in Phase 2b:
+#   Process: token ends in .exe | starts with proc_ | starts with process_
+#            | is "process_001".."process_008" (TTP placeholders from Phase 1)
+#            | ends in _child | ends in _elevated (TTP variant suffixes)
+#   File:    token ends in .ps1 | .dmp | .tmp | .txt | .db | .zip | .log
+#            | starts with \Registry | starts with file_ | starts with /
+#            | contains "cred_dump" | "beacon_response" | "sensitive_data"
+#            | "archive"
+#   Network: token matches IP:port pattern (digits.digits.digits.digits:digits)
+#            | starts with http:// or https://
+#            | starts with net_ (placeholder from Phase 1)
+#   User:    token is "victim_user" | contains backslash (domain\\user)
+#            | matches user_ prefix
+#   Fallback: unchanged (pass-through for any unmatched patterns)
+#
+# Source enumeration (all 5 TTP templates + M3_h2 / synthetic benign):
+#   T1059.001: atk_{N}_cmd.exe, atk_{N}_powershell.exe,
+#              atk_{N}_powershell.exe_child, atk_{N}_payload.ps1,
+#              atk_{N}_185.234.219.11:4444
+#   T1003.001: atk_{N}_mimikatz.exe, atk_{N}_mimikatz.exe_elevated,
+#              atk_{N}_lsass.exe (file node workaround), atk_{N}_cred_dump.dmp,
+#              atk_{N}_91.108.4.6:443
+#   T1071.001: atk_{N}_implant.exe, atk_{N}_192.168.1.2:53,
+#              atk_{N}_185.220.101.45:80, atk_{N}_beacon_response.tmp
+#   T1547.001: atk_{N}_dropper.exe, atk_{N}_reg.exe,
+#              atk_{N}_persisted_payload.exe,
+#              atk_{N}_Registry_Machine_..._Run, atk_{N}_194.165.16.11:8080
+#   T1041:     atk_{N}_exfil_tool.exe, atk_{N}_sensitive_data.db,
+#              atk_{N}_archive.zip, atk_{N}_45.142.212.100:443
+#   Benign (synthetic): proc_{N}, file_{N}.txt, victim_user
+#   Benign (ATLAS M3_h2): firefox.exe (firefox parser), IP addresses (DNS),
+#              Windows process names from security_events (e.g., svchost.exe)
+# ---------------------------------------------------------------------------
+
+# Phase 1 TTP-suffix map (kept for audit clarity; Phase 2 supersedes).
+ANONYMIZE_MAP: dict[str, str] = {
+    # T1059.001 PowerShell -- persisted_payload.exe before payload.ps1 to
+    # avoid partial substring replacement cascade.
+    "powershell.exe": "process_001",
+    "cmd.exe": "process_002",
+    "payload.ps1": "file_001",
+    "185.234.219.11:4444": "net_001",
+    # T1003.001 LSASS Memory
+    "mimikatz.exe": "process_003",
+    "lsass.exe": "file_002",
+    "cred_dump.dmp": "file_003",
+    "91.108.4.6:443": "net_002",
+    # T1071.001 Web Protocols
+    "implant.exe": "process_004",
+    "beacon_response.tmp": "file_004",
+    "192.168.1.2:53": "net_003",
+    "185.220.101.45:80": "net_004",
+    # T1547.001 Registry Run Keys -- persisted_payload.exe MUST come before
+    # payload.ps1 and reg.exe to avoid partial replacement cascade.
+    "persisted_payload.exe": "process_005",
+    "dropper.exe": "process_006",
+    "reg.exe": "process_007",
+    # Registry path (appears verbatim as file node obj in BERT text).
+    r"\Registry\Machine\Software\Microsoft\Windows\CurrentVersion\Run": "file_005",
+    "194.165.16.11:8080": "net_005",
+    # T1041 Exfiltration
+    "exfil_tool.exe": "process_008",
+    "sensitive_data.db": "file_006",
+    "archive.zip": "file_007",
+    "45.142.212.100:443": "net_006",
+}
+
+# Compiled regex for stripping atk_{N}_ prefix (Phase 2a).
+_ATK_PREFIX_RE = re.compile(r"^atk_\d+_")
+
+# IP:port pattern: used for network node classification.
+_IP_PORT_RE = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$")
+
+
+def _classify_and_collapse(token: str) -> str:
+    """Classify token by node type and collapse to canonical per-type token.
+
+    Called after Phase 1 (ANONYMIZE_MAP substitution) and Phase 2a (atk_ strip).
+    Returns one of: "proc_token", "file_token", "net_token", "user_token",
+    or the original token if no rule matches (fallback pass-through).
+
+    Classification rules are intentionally broad to catch all benign and attack
+    node ID variants enumerated in the module docstring.
+    """
+    # Process indicators.
+    if (
+        token.endswith(".exe")
+        or token.startswith("proc_")
+        or token.startswith("process_")
+        or token.endswith("_child")
+        or token.endswith("_elevated")
+    ):
+        return "proc_token"
+
+    # File indicators.
+    if (
+        token.endswith(".ps1")
+        or token.endswith(".dmp")
+        or token.endswith(".tmp")
+        or token.endswith(".txt")
+        or token.endswith(".db")
+        or token.endswith(".zip")
+        or token.endswith(".log")
+        or token.startswith("\\Registry")
+        or token.startswith("file_")
+        or token.startswith("/")
+        or "cred_dump" in token
+        or "beacon_response" in token
+        or "sensitive_data" in token
+    ):
+        return "file_token"
+
+    # Network indicators: IP:port or http(s):// URL.
+    if _IP_PORT_RE.match(token) or token.startswith("http://") or token.startswith("https://"):
+        return "net_token"
+    # Phase 1 network placeholder form.
+    if token.startswith("net_"):
+        return "net_token"
+
+    # User indicators.
+    if token == "victim_user" or token.startswith("user_") or "\\" in token:
+        return "user_token"
+
+    # Fallback: unmatched token passed through unchanged.
+    return token
+
+
+def _anonymize_token(token: str) -> str:
+    """Full two-phase anonymization for a single node ID token.
+
+    Phase 1: Apply ANONYMIZE_MAP (replace TTP-specific substrings).
+    Phase 2a: Strip atk_{N}_ prefix if present.
+    Phase 2b: Classify + collapse to canonical per-node-type token.
+
+    Both attack and benign node IDs collapse to the same token per type
+    (proc_token / file_token / net_token / user_token), making BERT unable
+    to distinguish attack from benign by any prefix, suffix, or substring.
+
+    Only BERT text rendering is affected; graph node IDs remain unchanged.
+    """
+    # Phase 1: TTP-suffix substitution (same as Path B).
+    result = token
+    for src, dst in ANONYMIZE_MAP.items():
+        result = result.replace(src, dst)
+
+    # Phase 2a: Strip atk_{N}_ prefix (Path B' extension).
+    result = _ATK_PREFIX_RE.sub("", result)
+
+    # Phase 2b: Classify and collapse.
+    result = _classify_and_collapse(result)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -190,16 +455,37 @@ def _select_first_window(events: list) -> list:
 # ---------------------------------------------------------------------------
 
 
-def _event_to_bert_text(ev: object) -> str:
-    """Render event to BERT input text per RFC-14.5-3 (no anonymization, RFC-14.5-6).
+def _event_to_bert_text(ev: object, *, anonymize: bool = True) -> str:
+    """Render event to BERT input text per RFC-14.5-3.
 
     Format: "{subject_type} {subject} {operation} {obj_type} {obj}"
-    Example: "process powershell.exe file_write file payload.ps1"
+
+    Path B' full anonymization: anonymize=True (default) applies two-phase
+    normalization via _anonymize_token():
+      Phase 1: ANONYMIZE_MAP replaces TTP-specific substrings.
+      Phase 2: atk_{N}_ prefix stripped + collapse to per-type canonical token
+               (proc_token / file_token / net_token / user_token).
+    Result: ALL process node IDs (attack and benign) -> "proc_token"; ALL file
+    node IDs -> "file_token"; ALL network IDs -> "net_token"; ALL user IDs ->
+    "user_token".  BERT cannot distinguish attack from benign at token level.
+
+    anonymize=False preserves verbatim token names (debugging only; not used
+    in any production path -- HTGN config uses graph embeddings, not text).
+
+    Example (anonymize=True, Path B'):
+        "process proc_token process_create process proc_token"
+    Example (anonymize=False, first-run behaviour):
+        "process atk_0_powershell.exe process_create process atk_0_cmd.exe"
     """
     st = ev.subject_type.value if hasattr(ev.subject_type, "value") else str(ev.subject_type)  # type: ignore[union-attr]
     ot = ev.obj_type.value if hasattr(ev.obj_type, "value") else str(ev.obj_type)  # type: ignore[union-attr]
     op = ev.operation if isinstance(ev.operation, str) else str(ev.operation)
-    return f"{st} {ev.subject} {op} {ot} {ev.obj}"  # type: ignore[union-attr]
+    subj = str(ev.subject)  # type: ignore[union-attr]
+    obj = str(ev.obj)  # type: ignore[union-attr]
+    if anonymize:
+        subj = _anonymize_token(subj)
+        obj = _anonymize_token(obj)
+    return f"{st} {subj} {op} {ot} {obj}"
 
 
 # ---------------------------------------------------------------------------
@@ -348,10 +634,12 @@ def _extract_bert_only_features(
     events_labeled: list[tuple[object, int]],
     device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Extract BERT CLS embeddings for each event (RFC-14.5-3).
+    """Extract BERT CLS embeddings for each event (RFC-14.5-3 + Path B anonymization).
 
-    Text format (RFC-14.5-3): "{subject_type} {subject} {operation} {obj_type} {obj}"
-    No anonymization (RFC-14.5-6).
+    Text format (RFC-14.5-3 + Path B Change 1):
+        "{subject_type} {anon(subject)} {operation} {obj_type} {anon(obj)}"
+    TTP-specific token substrings are replaced via ANONYMIZE_MAP to remove
+    lexical shortcuts that caused BERT-only F1=0.995 in the first 14.5 run.
 
     Returns:
         features: (N_events, 768) on CPU
@@ -364,7 +652,7 @@ def _extract_bert_only_features(
     bert_model = bert_model.to(device)
     bert_model.eval()
 
-    texts = [_event_to_bert_text(ev) for ev, _ in events_labeled]
+    texts = [_event_to_bert_text(ev, anonymize=True) for ev, _ in events_labeled]
     lbl_list = [lbl for _, lbl in events_labeled]
 
     batch_size = 32
@@ -459,7 +747,8 @@ def _extract_fusion_features(
 
     _, tokenizer = build_bert_text_encoder(BERT_MODEL, mode=TrainMode.frozen)
 
-    texts = [_event_to_bert_text(ev) for ev, _ in events_labeled]
+    # Path B Change 1: anonymize=True removes TTP-specific lexical shortcuts.
+    texts = [_event_to_bert_text(ev, anonymize=True) for ev, _ in events_labeled]
     lbl_list = [lbl for _, lbl in events_labeled]
 
     # Run Phase4Model per event (batch=1 for memory safety).
@@ -674,6 +963,11 @@ def main() -> int:
         f"(attack_train={attack_in_train}, attack_test={attack_in_test})",
         flush=True,
     )
+    print(
+        f"[14.5]   Path B anchors: anchor_user={dataset.anchor_user!r}, "
+        f"anchor_proc={dataset.anchor_proc!r}",
+        flush=True,
+    )
 
     # Collect all events for graph building (benign + attack).
     all_injected_events = [ev for ev, _ in dataset.events_with_labels]
@@ -847,10 +1141,10 @@ def main() -> int:
     # -----------------------------------------------------------------------
     elapsed = time.perf_counter() - t0_total
     print("\n" + "=" * 75, flush=True)
-    print("Phase 4 / Checkpoint 14.5 Anomaly Probe Report", flush=True)
+    print("Phase 4 / Checkpoint 14.5 Path B' Anomaly Probe Report", flush=True)
     print("=" * 75, flush=True)
     print(flush=True)
-    print("Protocol Summary:", flush=True)
+    print("Protocol Summary (Path B' final run -- full node-ID anonymization):", flush=True)
     print(
         f"  - 5 TTP x {EVENTS_PER_TTP} attack events = {5*EVENTS_PER_TTP} total attack", flush=True
     )
@@ -862,6 +1156,17 @@ def main() -> int:
     )
     print(f"  - 4 seeds: {PROBE_SEEDS}, {EPOCHS} epochs each", flush=True)
     print(f"  - Device: {device}, elapsed: {elapsed:.1f}s", flush=True)
+    print(
+        "  - Path B' Change: full node-ID normalization (proc_token/file_token/net_token/user_token)",
+        flush=True,
+    )
+    print("    All attack AND benign node IDs collapsed to per-type canonical token.", flush=True)
+    print("    atk_{N}_ prefix completely removed; no numeric discriminator remains.", flush=True)
+    print(
+        f"  - Path B Change 2: anchor_user={dataset.anchor_user!r}, "
+        f"anchor_proc={dataset.anchor_proc!r}",
+        flush=True,
+    )
     print(flush=True)
 
     print("Aggregate F1 (mean +/- std across 4 seeds):", flush=True)

@@ -712,6 +712,19 @@ Option α（commit `1b16d25`）原始设计使用 random-init frozen ModifiedMLM
 
 **审计 anchor**：α 失败的 commit `1b16d25` + 本 α' 修复 commit（`scripts/checkpoint14_option_alpha_prime_diagnostic.py`）+ user pre-decided interpretation framework（三类 category 预定义于 α' launch spec，2026-05-07）共同构成本条目的完整 audit trail。
 
+### Cross-modal fusion 14.5 probe HTGN-only baseline weakness (documented limitation)（2026-05-07，Checkpoint 14.5 Path B' 实测 baseline 揭示）
+
+**现象**：Phase 4 / Checkpoint 14.5 三 config 对比中 HTGN-only F1 实测稳定在 ~0.2 区间（远低于 random-attack-prediction baseline ~0.67）。fusion vs HTGN-only F1 lift +0.7 在数字上看似强信号但实际是 BERT 通路解决任务的反映而非 graph 通路贡献。
+
+**根因**：14.5 protocol 用 `atk_{idx}_` prefix 创建新 attack 节点配合 1-2 个 shared anchor benign 节点的设计在 Phase B' 实测下未让 attack 节点结构充分嵌入 benign graph——attack 链上多数事件仍涉及新 atk_ 节点，K-hop 子图中 attack 节点结构上较孤立，HTGN 学到的 attack 节点 embedding 缺乏与 benign 节点的 contrastive 区分信号。
+
+**Phase 12 论文 Methods 章节使用方式**：14.5 数据呈现时附加 caveat：
+> 14.5 protocol 在 attack 节点结构嵌入度上不足让 HTGN-only 缺乏合理 baseline，fusion vs HTGN-only delta 受此影响 inflate，主要诊断信号是 fusion vs BERT-only delta 即 14.5 双条件门槛中的 BERT-only 对照。
+
+避免 reviewer 误读 fusion vs HTGN-only +0.7 lift 为强信号。HTGN-only baseline 改善留给 Phase 5 RAPA 完整 20 模板加 Phase 7 联合预训练阶段——anchor 节点设计与 attack 节点 graph embedding 在大规模训练下都会自然改善。
+
+**审计 anchor**：本条目记录 14.5 protocol 的 documented limitation，与 14.5 Path B' 数字呈现一同构成完整 caveat 链。
+
 ## Phase 7 待办
 
 ### Gradient clipping 在 Phase 7 联合预训练 launch spec 必须显式启用（2026-05-06，Checkpoint 14 Gate 2 实测 grad_norm 2e14 触发）

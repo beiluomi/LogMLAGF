@@ -6,18 +6,26 @@
 
 ## 1. 项目当前阶段与 Checkpoint
 
-- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **进行中（4/5 sub-checkpoints 已完成；Phase 4 launch spec 严谨化升级版后总数为 5：11 / 12 / 13 / 14 / 14.5）**
+- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **5/5 sub-checkpoints 形式完成 + Path B'/B''  Result B 触发架构级 RFC，等 user 裁定 Option γ 是否实施**
 - **最新 Checkpoint**：Checkpoint 14（Phase 4 整体集成 + 七项 gate 验证）— **已通过 Option β 路径（5/7 PASS + 2/7 informational null finding）**：Gates 1/2/5/6/7 PASS（forward+backward batch=8 / 三套参数 grad norm > 1e-6 / 8-sample 50-epoch overfit loss 100% reduction / random text cos-sim p50=0.42 / batch=16 真实 PyG batched VRAM 5.13 GB + 单步 205.2 ms），Gates 3/4 在 Option A trained-state re-measurement 后仍 fail（Gate 3 entropy 6/8 over upper bound、Gate 4 cos-sim 1.0000）记入 Phase 12 论文素材作为 Phase 4 第二个 informational null finding。根因诊断：8-sample MLM overfit 在 frozen BERT + trainable MLMHead 配置下不构成 fusion engagement 的有效 pressure，MLMHead 单独 capacity 充分让 fusion 路径成 redundant。真正 evaluation 推到 Checkpoint 14.5 anomaly probe（loss 结构要求 graph-derived discriminative signal）+ Phase 7-8 联合预训练。
 - **Phase 4 进度**：Checkpoint 11 + Checkpoint 12（含真实数据 smoke test audit anchor）+ Checkpoint 13（CrossModalAttention 之上 + build_field_level_mask + MixedMLMCollator + ModifiedMLMHead + 80/20 perplexity 对比 driver）+ Checkpoint 14（Phase4Model 集成 wrapper + deep injection ViLBERT-style + 七项 gate 验证 5/7 PASS + 2/7 informational null Option β 闭环）已 done。下一个：Option α 补充诊断（frozen BERT + frozen MLMHead，30 分钟单 agent 直跑） → Checkpoint 14.5（异常检测前置 probe）→ tag `v0.4-fusion`。
 - **已完成 Phase**：Phase 0（tag `v0.0-scaffold`）+ Phase 1（tag `v0.1-data`）+ Phase 2（tag `v0.2-bert`）+ Phase 3（tag `v0.3-htgn`，conditional pass 后变更为 informationally complete via Checkpoint 11.2-γ-1）
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：`682f819`（Option α' 补充诊断 refinement Category 1 落档；前置 Option α 原始 commit `1b16d25` inconclusive + Checkpoint 14 Option β 形式闭环 commit `8204b4a`）
-- **Message**：`test(phase4): Checkpoint 14 supplementary diagnostic refinement (α' pretrained MLMHead)`
+- **Hash**：（本 commit Path B' final + audit-PASS Result B verdict + PROGRESS/CHECKPOINT_LOG 同步；前置 commit chain 含 protocol violation lesson `aaad0bb` + α' Category 1 `682f819` + α inconclusive `1b16d25` + Checkpoint 14 closure `8204b4a` + 14.5 first run with protocol violation `7838ee8`）
+- **Message**：`feat(phase4): Checkpoint 14.5 Path B' final with full anonymization (audit-clean Result B - architectural-level RFC trigger for Option γ)`
 - **Date**：2026-05-07
 - **Option α' result**：**Category 1 — Gate 5 FAIL**——pretrained-frozen MLMHead 配置下 epoch1 0.6532 → epoch50 0.1197 reduction 81.7% < 90% 阈值。Gates 3/4 SKIPPED 早退出。**Confound 真实但不充分**：α 原始 epoch50 loss 3.62 vs α' epoch50 loss 0.12 是 30x 改善证明 random-head gradient-noise confound 真实存在但即使消除 confound，HTGN + CrossModalAttention 在 frozen-head pressure 下仍无法 fully converge MLM loss → **真 fusion incapacity 强信号**。按 user 预设解读框架 Category 1 含义：14.5 fail 时直接进架构级 RFC 评估 Option γ + 其他架构修复路径，**不需要再做 root cause 回合**。
-- **Checkpoint 14.5 首轮 commit `7838ee8` 含 implementer 协议违反保留作为 audit anchor 详见 known_issues.md::经验启发式校准记录::"Implementer commit-on-gate-fail 协议违反案例"**。Gate 3 FAIL（BERT-only F1 0.995 ≈ fusion F1 0.995，lexical leakage 让 BERT 单独 saturate task），Gates 1/2 PASS 但 HTGN-only baseline 0.23 异常弱（attack 节点 atk_ 前缀让结构上下文有限），fusion lift over HTGN-only +0.76 misleading 主要 BERT 解决任务而非 graph 帮助。User 裁定 Path B 主路径（anonymize TTP-name tokens + share node IDs）作为 14.5 公平测试 fusion 的最低成本最高 ROI 选项，重跑后按预设解读框架判定 Phase 4 结局：正向 evidence 路径闭环 v0.4-fusion / null evidence 路径触发架构级 RFC Option γ / anonymization-induced degradation 路径单独 RFC protocol 调整。Phase 4 当前累计三个 null finding 加 Path B 第四轮诊断如全 fail 才考虑 Phase 4 全 null 严肃方法论反思路径。
+- **Checkpoint 14.5 三轮诊断完整闭环（commits `7838ee8` 首轮 + Path B 实施 reverted into Path B' refinement + 本 commit Path B' final + audit-PASS Result B verdict）**：
+  - **首轮**（commit `7838ee8`，含 implementer 协议违反保留作为 audit anchor）：Gate 3 FAIL（BERT-only F1 0.995 ≈ fusion F1 0.995 lexical leakage TTP-name tokens 让 BERT 单独 saturate）
+  - **Path B**（uncommitted 中间态，已 superseded by B'）：扩 ANONYMIZE_MAP 加 anonymize TTP-name tokens + shared anchor 节点设计，BERT-only F1 1.000 仍通过 `atk_N_` prefix substring 完美识别 attack 节点（implementer's ANONYMIZE_MAP miss `atk_` prefix oversight）→ Result B 但 contaminated
+  - **Path B' final**（本 commit）：扩 ANONYMIZE_MAP 加 atk_N_ prefix two-phase normalization (Phase 2a 正则 strip prefix + Phase 2b 节点类型 collapse 到 4 个 canonical token)，attack/benign string-level indistinguishable。**Spec compliance review AUDIT PASS**：anonymization 完整覆盖 23 attack node ID forms 零 oversight，BERT-only F1=0.9697 来自 operation-type co-occurrence patterns（合理 case a 信号——attack 用 NET_CONNECT/NET_SEND_NETWORK/FILE_WRITE/FILE_READ，ATLAS benign parsers 用 NET_DNS_QUERY/RESPONSE/HTTP_REQUEST/FILE_ACCESS——非 lexical leakage）。Fusion F1=0.8699 std=0.0506 underperform BERT-only **-0.0998**（远低于 +0.01 阈值）是 genuine architectural concern。
+- **三 config aggregate F1 (Path B' final, 4 seeds [1,7,42,100])**：HTGN-only 0.2143 ± 0.0000 / BERT-only 0.9697 ± 0.0000 / Fusion 0.8699 ± 0.0506
+- **双条件门槛**：Gate 1 lift +0.6556 ✅ / Gate 2 paired t-test p=0.0001 ✅ / **Gate 3 fusion - BERT-only -0.0998 ❌**
+- **Per-TTP F1 informational** (seed=42)：T1059.001 0.48/0.95/0.86 / T1003.001 0.37/0.84/0.82 / T1071.001 0.37/0.95/0.95 / T1547.001 0.24/0.95/0.89 / T1041 0.24/0.95/0.67
+- **Result B 触发架构级 RFC for Option γ**：fusion cross-attention 在 fully-anonymized fair conditions 下 actively interfere BERT-only 任务解决能力 ~10pp，是真实架构 concern 不是 noise。Option γ 实施 spec：CrossModalAttention 加可学习 scaling factor `λ` 让 `fused_text = BERT_residual + λ · tg_out_proj(tg_ctx)`，λ init 1.0 强制 fusion 残差从 init 起就有显著量级；复跑 Checkpoint 12 unit tests (28 tests ~5s) + Checkpoint 14 七项 gate (~30 min) + 14.5 Path B' final 协议 (~25 min)。**总工时估算 1-2 周**，含 RFC 决议 + implementer dispatch + 4 步 review pattern + bug 调试 buffer。等 user 裁定是否实施。
+- Phase 4 累计 4 个诊断 null finding：C11.2-γ-1 (link prediction) + C14 Gates 3/4 (MLM-overfit) + α' Category 1 (frozen MLMHead) + 14.5 Result B (anonymized anomaly probe)。HTGN-only F1 ≈ 0.21 在 14.5 中是 documented limitation（attack 节点结构嵌入度不足），caveat 已记入 Phase 12 论文素材。
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
 
@@ -68,7 +76,11 @@
 | 43 | `1b16d25` | option α diagnostic | test(phase4): Checkpoint 14 supplementary diagnostic (α frozen MLMHead) |
 | 44 | `ddf90c8` | docs / α inconclusive | docs(progress): record Option α inconclusive result + 14.5 path RFC pending |
 | 45 | `682f819` | option α' refinement | test(phase4): Checkpoint 14 supplementary diagnostic refinement (α' pretrained MLMHead) |
-| 46 | `<this commit>` | docs / α' Category 1 | docs(progress): record Option α' Category 1 (fusion incapacity strong signal) + Checkpoint 14.5 dispatch |
+| 46 | `a3fb2b7` | docs / α' Category 1 | docs(progress): record Option α' Category 1 (fusion incapacity strong signal) + Checkpoint 14.5 dispatch |
+| 47 | `7838ee8` | checkpoint 14.5 first run (含协议违反保留作为 audit anchor) | feat(probe): Phase 4 / Checkpoint 14.5 anomaly detection probe with 5 ATT&CK TTP templates |
+| 48 | `eddb23c` | docs / Phase 5 schema | docs(known_issues): Phase 5 待办 add ALLOWED_EDGE_TRIPLES schema 扩展议程 |
+| 49 | `aaad0bb` | docs / protocol violation lesson | docs(phase4): record Checkpoint 14.5 implementer protocol violation lesson |
+| 50 | `<this commit>` | checkpoint 14.5 path B' final (Result B) | feat(phase4): Checkpoint 14.5 Path B' final with full anonymization (audit-clean Result B - architectural-level RFC trigger for Option γ) |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 / Phase 4 设计偏离 + 经验启发式校准）
 

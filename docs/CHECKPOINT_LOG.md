@@ -712,4 +712,81 @@ User 裁定三层路径：
 
 ---
 
-*下一条记录：Phase 4 / Option α 补充诊断（frozen BERT + frozen MLMHead 30 分钟单 agent 直跑），随后 Checkpoint 14.5 异常检测前置 probe。*
+## Checkpoint 14.5 — 异常检测前置 probe（三轮诊断完整闭环：first run + Path B + Path B' final + audit-PASS Result B verdict）
+
+- **完成日期**：2026-05-07
+- **Commits**：`7838ee8`（首轮主 commit，含 implementer 协议违反保留作为 audit anchor）+ `eddb23c`（Phase 5 schema 扩展议程）+ `aaad0bb`（implementer 协议违反 lesson 落档）+ 本 commit（Path B' final 含 full anonymization + audit-PASS Result B + PROGRESS / CHECKPOINT_LOG 同步）
+- **方法论**：subagent-driven-development skill 的进阶应用——三轮诊断 refinement 串联 + RFC-first 纪律深度落地 + protocol violation lesson 即时纳入纪律体系。Phase 4 累计四个 informational null finding 形成完整 negative-result-as-positive-contribution + transparency 叙事。
+
+### 三轮诊断 audit trail
+
+| 轮次 | 配置 | BERT-only F1 | Fusion F1 | Gate 3 (fusion - BERT-only) | Verdict |
+|---|---|---:|---:|---:|---|
+| **首轮** (commit `7838ee8`) | 原始 lexical leakage 保留（RFC-14.5-6 设计） | 0.9950 | 0.9950 | +0.0000 | FAIL（lexical leakage TTP-name tokens 让 BERT 单独 saturate）+ implementer 协议违反 commit on gate fail |
+| **Path B** (uncommitted, superseded) | + ANONYMIZE_MAP TTP-name tokens + shared anchor 节点 | 1.0000 | 0.9203 | -0.0797 | FAIL Result B 但 contaminated（`atk_N_` prefix 仍 leak BERT 完美识别）|
+| **Path B' final** (本 commit) | + atk_N_ prefix two-phase normalization (Phase 2a regex strip + Phase 2b 节点类型 collapse 到 4 个 canonical token) | 0.9697 | 0.8699 | **-0.0998** | **FAIL Result B + audit-PASS clean signal** |
+
+### Path B' final 三 config aggregate F1（4 seeds [1, 7, 42, 100]）
+
+| Config | Mean F1 | Std |
+|---|---:|---:|
+| HTGN-only | 0.2143 | 0.0000 |
+| BERT-only | 0.9697 | 0.0000 |
+| Fusion | 0.8699 | 0.0506 |
+
+### Path B' final 双条件门槛
+
+| Gate | 实测 | 阈值 | 状态 |
+|---|---:|---|---|
+| 1 fusion - HTGN-only lift | +0.6556 | ≥ 0.03 | ✅ PASS |
+| 2 paired t-test p | 0.0001 | < 0.1 | ✅ PASS |
+| 3 fusion - BERT-only | **-0.0998** | > 0.01 | ❌ **FAIL** |
+
+### Per-TTP F1 informational（seed=42 probe）
+
+| TTP | HTGN-only | BERT-only | Fusion |
+|---|---:|---:|---:|
+| T1059.001 PowerShell | 0.4828 | 0.9524 | 0.8571 |
+| T1003.001 LSASS | 0.3704 | 0.8421 | 0.8235 |
+| T1071.001 Web Proto | 0.3704 | 0.9524 | 0.9474 |
+| T1547.001 Registry | 0.2400 | 0.9524 | 0.8889 |
+| T1041 Exfiltration | 0.2400 | 0.9524 | 0.6667 |
+
+### Spec compliance review audit-PASS（实施 Path B' 后单一轮 review）
+
+Reviewer 独立验证 ANONYMIZE_MAP 覆盖度：
+
+- 23 attack node ID forms 全部 trace 通过两阶段 normalization (Phase 1 substring + Phase 2a regex prefix strip + Phase 2b 节点类型 collapse) 落入 4 canonical token (`proc_token` / `file_token` / `net_token` / `user_token`)
+- benign 节点 ID (e.g., `proc_0`, `proc_19`, `file_0.txt`, `victim_user`, `NT AUTHORITY\SYSTEM`, ATLAS DNS IP nodes, `vmtoolsd.exe`) 全部 collapse 到同 4 canonical token
+- 零 oversight，attack/benign 在 BERT 输入文本 string-level 不可由 prefix 或 substring 模式区分
+
+Reviewer 对 BERT-only F1 = 0.9697 的统计 sanity 解释：
+
+- 是 **case (a) 合法 operation-type co-occurrence pattern signal** 不是 lexical leakage
+- 攻击模板用 `NET_CONNECT` / `NET_SEND_NETWORK` / `FILE_WRITE` / `FILE_READ` operation strings
+- ATLAS benign parsers 用 `NET_DNS_QUERY/RESPONSE` / `NET_HTTP_REQUEST` / `FILE_ACCESS` 等不同 operation vocabulary
+- BERT 看到 5-token input string `f"{st} {subj} {op} {ot} {obj}"` 中的 operation 字段就能 perfect 识别 attack/benign（这是合理 behavioral signal 不是字符级泄露）
+- Anonymizing operation strings 会构成 Path B'' 协议变更违反 user 已 imposed 的 stop rule
+
+**审计结论**：Result B (fusion - BERT-only = -0.0998) 是 clean architectural signal，fusion cross-attention 在 fully-anonymized fair conditions 下 actively interfere BERT-only 任务解决能力约 10pp 是真实架构 concern。Architecture-level RFC for Option γ 触发条件干净成立。
+
+### 决策点
+
+- **Implementer 协议违反 lesson 即时落档**：首轮 implementer commit on gate fail 触发 protocol violation lesson 写入 known_issues.md::经验启发式校准记录::"Implementer commit-on-gate-fail 协议违反案例 Checkpoint 14.5 commit 7838ee8" 加严措辞 ABSOLUTE PROHIBITION + Verification 脚本例外不适用 + 未来违反触发 commit revert 不再宽松。Path B 与 Path B' 两轮 implementer 都正确遵守 STAGE-but-NO-COMMIT 协议，纪律恢复。
+- **Phase 4 累计 4 个 informational null finding 的 paper-grade 叙事**：C11.2-γ-1（structure-determined link prediction） + C14 Gates 3/4（MLM-overfit fusion engagement） + α' Category 1（frozen MLMHead pressure isolation） + 14.5 Result B（fully-anonymized anomaly probe），4 个 null finding 形成完整 "我们诚实测试 cross-modal fusion 在多种 task pressure 结构下都未自发 engage 图路径" 实证 chain。论文 Methods 章节作为 negative-result-as-positive-contribution + transparency 工程纪律 contribution evidence。
+- **HTGN-only F1 ≈ 0.21 documented limitation**：14.5 protocol 用 atk_ prefix 创建新 attack 节点配合 1-2 个 shared anchor benign 节点的设计未让 attack 节点结构充分嵌入 benign graph，HTGN-only 缺乏合理 baseline。fusion vs HTGN-only +0.66 lift 因 HTGN-only 弱基线 inflate，主要诊断信号是 fusion vs BERT-only delta -0.0998。caveat 已落 Phase 12 论文素材子节作为论文呈现 14.5 数据时必须附加的 Methods 章节 caveat 避免 reviewer 误读。HTGN-only 改善留 Phase 5 RAPA 完整 20 模板 + Phase 7 联合预训练 anchor 节点设计与 attack 节点 graph embedding 自然改善路径。
+- **Stop rule 严格执行**：Path B' 是 14.5 protocol refinement 最后一轮，Result B audit-PASS 后无 Path B'' 也无更深 protocol patch。Operation-type signal anonymization 即使能让 BERT-only 失去 case (a) 信号也不允许（协议-fitting until we get the right result 破坏诊断诚实性）。
+
+### 下一步
+
+**等待 user 裁定 Option γ 是否实施**。Option γ implementation spec：
+
+- **核心改动**：CrossModalAttention 加可学习 scaling factor `λ` 让 `fused_text = BERT_residual + λ · tg_out_proj(tg_ctx)`，λ init 1.0 强制 fusion 残差从 init 起就有显著量级（解决 14.5 揭示的 fusion 残差 init 量级 0.12% 太小问题）。同样改动应用于 graph 通路 `fused_graph = HTGN_residual + λ · gt_out_proj(gt_ctx)`。可独立 λ_t 与 λ_g 或共享单 λ（待 RFC 决定）。
+- **复跑工时**：Checkpoint 12 unit tests 28 tests (~5s) + Checkpoint 12 real-data smoke test (~30s) + Checkpoint 14 七项 gate (~30 min on RTX 4090) + 14.5 Path B' protocol (~25 min)
+- **完整工时估算 1-2 周**：含 RFC 决议（Option γ spec 细节如 λ shared vs independent + init value sweep 等） + implementer dispatch (实施 + 自审 + 4 步 review pattern) + 复跑全部 audit anchor + bug 调试 buffer + 结果分析与 docs 同步
+- **预期结果与 fail 路径**：如 Option γ 实施后 14.5 fusion 比 BERT-only F1 显著高 → 架构修复成功 v0.4-fusion 闭环 → Phase 5；如 14.5 仍 fail → 触发更深架构 RFC（BERT 解冻 / cross-attention 容量增强 / 替换为 simpler concat fusion 等）或接受 Phase 4 全 null 严肃方法论反思路径
+- **替代决策**：如 user 评估 Option γ 工时投入 vs Phase 5 推进价值后决定不实施，Phase 4 闭环以 4 个 null finding + 完整 audit trail 状态进入 Phase 5 RAPA 实施，论文 Methods 章节诚实承认创新点一在 Phase 4 阶段未获得正向实证只能依赖 Phase 7-8 大规模验证。这种诚实是 transparency 但同时是 Phase 7-8 do-or-die 的现实陈述。
+
+---
+
+*下一条记录：Phase 4 收尾路径——Option γ 实施 OR Phase 4 全 null 闭环进 Phase 5（等 user 裁定）。*

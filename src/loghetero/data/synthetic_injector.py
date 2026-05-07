@@ -1,8 +1,21 @@
-"""Synthetic attack event injector (Phase 4 / Checkpoint 14.5).
+"""Synthetic attack event injector (Phase 4 / Checkpoint 14.5 Path B).
 
 Injects synthetic ATT&CK TTP attack events into a benign event stream
 using a shared-seed anchoring design (RFC-14.5-4) and produces a mixed
 dataset suitable for the three-config anomaly detection probe experiment.
+
+Path B Change 2 (shared anchor node extension):
+    Each TTP chain now anchors on TWO existing benign nodes (seed=42,
+    deterministic): (1) the seed user node (event 1 subject, unchanged from
+    prior run) and (2) one benign process node that spawns the first
+    atk_-prefixed process in the chain via a bridging PROCESS_CREATE event.
+    This removes the "trivial graph isolation" that caused HTGN-only F1=0.23
+    in the first 14.5 run by creating denser K-hop connectivity from benign
+    nodes to attack chain nodes.
+
+    Anchor process selection: most-frequent process node in the benign event
+    stream, deterministic given seed=42.  Falls back to user node if no
+    process nodes are available.
 
 Shared-seed APT-realistic injection design (RFC-14.5-4):
 
@@ -33,6 +46,8 @@ Usage::
     result = injector.build()
     # result.events_with_labels: list of (Event, label: int) pairs
     # result.train_events / result.test_events: 80/20 split
+    # result.anchor_user: benign user node used as seed
+    # result.anchor_proc: benign process node used as second anchor (Path B)
 """
 
 from __future__ import annotations
@@ -45,7 +60,7 @@ if TYPE_CHECKING:
     pass
 
 from loghetero.data.attack_templates.base import AttackTemplate
-from loghetero.data.parsers.base import Event, NodeType
+from loghetero.data.parsers.base import EdgeType, Event, NodeType
 
 # RFC-14.5-9: 5 TTPs x 100 events = 500 attack events total.
 EVENTS_PER_TTP: int = 100
@@ -64,6 +79,10 @@ class InjectedDataset:
         test_events: 20% split (200 events) with labels.
         per_ttp_events: dict mapping TTP id to list of (Event, label=1) pairs.
         benign_events_sampled: the 500 benign events selected (label=0).
+        anchor_user: benign user node id used as seed for all TTP chains.
+        anchor_proc: benign process node id used as second anchor (Path B
+            Change 2); empty string if no process node was available in
+            benign stream.
     """
 
     events_with_labels: list[tuple[Event, int]] = field(default_factory=list)
@@ -71,6 +90,8 @@ class InjectedDataset:
     test_events: list[tuple[Event, int]] = field(default_factory=list)
     per_ttp_events: dict[str, list[tuple[Event, int]]] = field(default_factory=dict)
     benign_events_sampled: list[Event] = field(default_factory=list)
+    anchor_user: str = ""
+    anchor_proc: str = ""
 
 
 class SyntheticInjector:
@@ -131,6 +152,27 @@ class SyntheticInjector:
             return "victim_user"
         return max(user_counts, key=lambda k: user_counts[k])
 
+    def _pick_anchor_process(self) -> str:
+        """Select the most-frequent process node from benign stream as a second anchor.
+
+        Path B Change 2: Deterministic selection with seed=42 (matching the
+        rest of the protocol).  Returns the top-frequency process node name.
+        Falls back to empty string if no process nodes found in benign stream.
+
+        Empty string signals the caller to skip the second-anchor bridging event.
+        """
+        proc_counts: dict[str, int] = {}
+        for ev in self.benign_events:
+            if ev.subject_type == NodeType.process:
+                proc_counts[ev.subject] = proc_counts.get(ev.subject, 0) + 1
+            if ev.obj_type == NodeType.process:
+                proc_counts[ev.obj] = proc_counts.get(ev.obj, 0) + 1
+        if not proc_counts:
+            return ""
+        # Deterministic: pick by count descending, then name alphabetically for
+        # tie-breaking (no randomness beyond what the benign stream provides).
+        return max(proc_counts, key=lambda k: (proc_counts[k], k))
+
     def _get_window_bounds(self) -> tuple[int, int]:
         """Return [t_start, t_end] of the benign event window."""
         if not self.benign_events:
@@ -147,12 +189,24 @@ class SyntheticInjector:
         t_end: int,
         master_rng: random.Random,
         global_instance_offset: int,
+        anchor_proc: str = "",
     ) -> list[Event]:
         """Generate events_per_ttp events for one TTP by calling generate() repeatedly.
 
         Each TTP chain typically produces 7 events (see template modules).
         We call generate() enough times to accumulate events_per_ttp events,
         using unique instance_id per chain to avoid node ID collisions.
+
+        Path B Change 2: If anchor_proc is non-empty, prepend one bridging event
+        per chain instance (anchor_proc -> PROCESS_CREATE -> first_atk_proc_obj)
+        to create an additional K-hop connection from the benign process into
+        the attack chain.  The bridging event is labeled 1 (attack) because it
+        is part of the injected TTP chain and is not a legitimate benign event.
+
+        The first_atk_proc_obj is inferred from the first generated event's
+        object (which is always the first atk_-prefixed process in each chain).
+        If the first event's object is not a process, no bridging event is added
+        to avoid type mismatches.
         """
         events: list[Event] = []
         chain_idx = 0
@@ -166,6 +220,33 @@ class SyntheticInjector:
                 rng=master_rng,
                 instance_id=iid,
             )
+            # Path B Change 2: insert bridging event from benign anchor_proc to
+            # the first atk_-prefixed process object in this chain.
+            if anchor_proc and chain_events:
+                first_ev = chain_events[0]
+                # All templates have event 1 obj as a process node (cmd.exe,
+                # mimikatz.exe, implant.exe, dropper.exe, exfil_tool.exe).
+                if first_ev.obj_type == NodeType.process:
+                    # Timestamp: 1 ns before first event (must be < first_ev.timestamp_ns).
+                    bridge_ts = max(t_start, first_ev.timestamp_ns - 1)
+                    bridge_ev = Event(
+                        timestamp_ns=bridge_ts,
+                        subject=anchor_proc,
+                        subject_type=NodeType.process,
+                        obj=first_ev.obj,  # first atk_ process node
+                        obj_type=NodeType.process,
+                        operation=EdgeType.PROCESS_CREATE.value,
+                        log_type="synthetic_atlas",
+                        scenario_id="synthetic_apt",
+                        host_id="h2",
+                        attributes={
+                            "ttp": template.ttp_id,
+                            "instance_id": iid,
+                            "label": 1,
+                            "anchor_bridge": True,
+                        },
+                    )
+                    chain_events = [bridge_ev, *chain_events]
             events.extend(chain_events)
             chain_idx += 1
         # Trim to exact target (within-TTP shuffle will handle later).
@@ -181,6 +262,7 @@ class SyntheticInjector:
         within_ttp_rng = random.Random(WITHIN_TTP_SEED)
 
         seed_user = self._pick_seed_user()
+        anchor_proc = self._pick_anchor_process()
         t_start, t_end = self._get_window_bounds()
 
         # --- 1. Generate attack events per TTP ----------------------------------
@@ -200,6 +282,7 @@ class SyntheticInjector:
                 t_end=t_end,
                 master_rng=master_rng,
                 global_instance_offset=global_offset,
+                anchor_proc=anchor_proc,
             )
             labeled = [(ev, 1) for ev in ttp_events]
 
@@ -246,4 +329,6 @@ class SyntheticInjector:
             test_events=test_pool,
             per_ttp_events=per_ttp_events,
             benign_events_sampled=sampled_benign,
+            anchor_user=seed_user,
+            anchor_proc=anchor_proc,
         )
