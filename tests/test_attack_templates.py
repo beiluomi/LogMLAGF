@@ -10,6 +10,8 @@ Tests verify:
     constants pattern + 6-7 tests per new TTP
   - Phase 5 / Checkpoint 15 Cycle B: T1068 priv-grant workaround (seed_user as
     subject of USER_PRIV_GRANT, inventory entry #2) + vuln_driver.sys file node
+  - Phase 5 / Checkpoint 15 Cycle C: T1021.001 RDP single-host approximation
+    workaround #3 (source-host-only view, USER_EXPLICIT_LOGON seed event)
 
 These tests are pure Python + loghetero imports; no ATLAS data required.
 """
@@ -50,17 +52,26 @@ def _make_template_call(template_cls: type, seed: int = 42, iid: int = 0) -> lis
 
 
 def test_all_templates_import() -> None:
-    """ALL_TEMPLATES must contain exactly 7 templates (5 Phase 4 + 2 Phase 5: T1055 + T1068)."""
+    """ALL_TEMPLATES must contain exactly 8 templates (5 Phase 4 + 3 Phase 5: T1055+T1068+T1021.001)."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
 
-    assert len(ALL_TEMPLATES) == 7, f"Expected 7 templates, got {len(ALL_TEMPLATES)}"
+    assert len(ALL_TEMPLATES) == 8, f"Expected 8 templates, got {len(ALL_TEMPLATES)}"
 
 
 def test_all_template_ttp_ids() -> None:
     """Each template must have the correct TTP id."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
 
-    expected_ids = {"T1059.001", "T1003.001", "T1071.001", "T1547.001", "T1041", "T1055", "T1068"}
+    expected_ids = {
+        "T1059.001",
+        "T1003.001",
+        "T1071.001",
+        "T1547.001",
+        "T1041",
+        "T1055",
+        "T1068",
+        "T1021.001",
+    }
     actual_ids = {t.ttp_id for t in ALL_TEMPLATES}
     assert actual_ids == expected_ids
 
@@ -372,7 +383,7 @@ def test_injector_total_event_count() -> None:
 
     expected_attack = (
         len(ALL_TEMPLATES) * EVENTS_PER_TTP
-    )  # 7 * 100 = 700 (Phase 5 adds T1055 + T1068)
+    )  # 8 * 100 = 800 (Phase 5 adds T1055 + T1068 + T1021.001)
     assert attack_count == expected_attack, f"Attack count {attack_count} != {expected_attack}"
     assert (
         benign_count == NUM_BENIGN_MATCHED
@@ -380,7 +391,7 @@ def test_injector_total_event_count() -> None:
 
 
 def test_injector_train_test_split_ratio() -> None:
-    """80/20 split: total events = 7*100 + 500 = 1200; train ~960, test ~240."""
+    """80/20 split: total events = 8*100 + 500 = 1300; train ~1040, test ~260."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
     from loghetero.data.parsers.base import EdgeType, Event, NodeType
     from loghetero.data.synthetic_injector import (
@@ -392,7 +403,7 @@ def test_injector_train_test_split_ratio() -> None:
     t_start = int(1.5e18)
     rng = random.Random(7)
     benign_events = []
-    for _ in range(1200):
+    for _ in range(1300):
         ev = Event(
             timestamp_ns=t_start + rng.randint(0, int(3.6e12)),
             subject="victim_user",
@@ -426,7 +437,7 @@ def test_injector_train_test_split_ratio() -> None:
 
 
 def test_injector_per_ttp_entries() -> None:
-    """SyntheticInjector must produce entries for all 7 TTP ids (Phase 4 x5 + Phase 5 T1055 + T1068)."""
+    """SyntheticInjector must produce entries for all 8 TTP ids (Phase 4 x5 + Phase 5 T1055+T1068+T1021.001)."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
     from loghetero.data.parsers.base import EdgeType, Event, NodeType
     from loghetero.data.synthetic_injector import SyntheticInjector
@@ -452,7 +463,16 @@ def test_injector_per_ttp_entries() -> None:
     injector = SyntheticInjector(benign_events=benign_events, templates=ALL_TEMPLATES, seed=42)
     dataset = injector.build()
 
-    expected_ids = {"T1059.001", "T1003.001", "T1071.001", "T1547.001", "T1041", "T1055", "T1068"}
+    expected_ids = {
+        "T1059.001",
+        "T1003.001",
+        "T1071.001",
+        "T1547.001",
+        "T1041",
+        "T1055",
+        "T1068",
+        "T1021.001",
+    }
     assert set(dataset.per_ttp_events.keys()) == expected_ids
 
 
@@ -568,7 +588,7 @@ def test_attack_templates_no_network_fetch(monkeypatch: pytest.MonkeyPatch) -> N
     t_end = t_start + int(3.6e12)
     rng = _make_rng()
 
-    # All 7 templates must work without network access.
+    # All 8 templates must work without network access.
     for template in ALL_TEMPLATES:
         events = template.generate(
             seed_subject="victim_user",
@@ -885,5 +905,158 @@ def test_t1068_labels_are_1() -> None:
     )
 
     events = _make_template_call(T1068ExploitationForPrivEsc)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+# ---------------------------------------------------------------------------
+# T1021.001 RDP (Phase 5 / Checkpoint 15 Cycle C)
+# ---------------------------------------------------------------------------
+
+
+def test_t1021_001_generates_8_events() -> None:
+    """T1021.001 must generate exactly 8 events."""
+    from loghetero.data.attack_templates.t1021_001_rdp import T1021001RDP
+
+    events = _make_template_call(T1021001RDP)
+    assert len(events) == 8, f"Expected 8 events, got {len(events)}"
+
+
+def test_t1021_001_event_types() -> None:
+    """T1021.001 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    Specifically verifies that event 1 (USER_EXPLICIT_LOGON) uses the triple
+    (user, USER_EXPLICIT_LOGON, process) which IS in ALLOWED_EDGE_TRIPLES (Q-1
+    mini-checkpoint addition, line 139 of parsers/base.py).
+    """
+    from loghetero.data.attack_templates.t1021_001_rdp import T1021001RDP
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType, NodeType
+
+    events = _make_template_call(T1021001RDP)
+
+    # Confirm the triple used by the seed event IS in ALLOWED_EDGE_TRIPLES before looping.
+    seed_triple = (NodeType.user, EdgeType.USER_EXPLICIT_LOGON, NodeType.process)
+    assert seed_triple in ALLOWED_EDGE_TRIPLES, (
+        "(user, USER_EXPLICIT_LOGON, process) not in ALLOWED_EDGE_TRIPLES -- "
+        "Q-1 mini-checkpoint addition may be missing."
+    )
+
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1021.001"
+
+
+def test_t1021_001_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1021_001_rdp import T1021001RDP
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1021001RDP)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1021_001_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1021_001_rdp import T1021001RDP
+
+    events = _make_template_call(T1021001RDP)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1021_001_timestamps_in_window() -> None:
+    """All T1021.001 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1021_001_rdp import T1021001RDP
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1021001RDP()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1021_001_single_host_approximation() -> None:
+    """Validate schema workaround #3: single-host approximation (inventory entry #3).
+
+    Workaround #3 (docs/known_issues.md "Checkpoint 17 schema workaround inventory
+    tracking", entry #3):
+      T1021.001 RDP spans source + target hosts; ATLAS schema is single-host.
+      This template models only the SOURCE host perspective.
+      Lateral execution on TARGET host is NOT modeled (Phase 9 DARPA TC E3 deferral).
+
+    This test verifies three properties of the workaround implementation:
+      1. Event 1 uses USER_EXPLICIT_LOGON (4648), not USER_LOGON (4624).
+         USER_EXPLICIT_LOGON is the correct EventID for RDP with explicit credentials
+         and distinguishes T1021.001 from T1078 (interactive 4624 logon).
+      2. All 8 events share the same host_id field (single-host modeling, not multi-host).
+         If multi-host were modeled, some events would have a different host_id for
+         the target host -- the workaround ensures a consistent source-host host_id.
+      3. The target_host node is modeled as NodeType.network (IP:3389), not as a
+         separate host graph -- consistent with the single-host approximation.
+    """
+    from loghetero.data.attack_templates.t1021_001_rdp import T1021001RDP
+    from loghetero.data.parsers.base import EdgeType, NodeType
+
+    iid = 3
+    template = T1021001RDP()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    # Property 1: seed event must use USER_EXPLICIT_LOGON (not USER_LOGON).
+    ev_seed = events[0]
+    assert ev_seed.operation == EdgeType.USER_EXPLICIT_LOGON.value, (
+        f"Event 1 must use USER_EXPLICIT_LOGON (4648 RDP explicit credentials), "
+        f"got {ev_seed.operation!r}. Using USER_LOGON would conflate T1021.001 "
+        f"with T1078 (4624 interactive logon)."
+    )
+    assert (
+        ev_seed.operation != EdgeType.USER_LOGON.value
+    ), "Event 1 must NOT use USER_LOGON; T1021.001 uses explicit credentials (4648)."
+
+    # Property 2: all 8 events share consistent host_id (single-host modeling).
+    host_ids = {ev.host_id for ev in events}
+    assert len(host_ids) == 1, (
+        f"All 8 events must share the same host_id (single-host approximation, "
+        f"workaround #3). Got distinct host_ids: {host_ids}. "
+        f"Lateral execution on TARGET host is NOT modeled (Phase 9 deferral)."
+    )
+
+    # Property 3: target_host is modeled as network node (IP:port), not a host graph.
+    ev_net_connect = events[1]
+    assert ev_net_connect.operation == EdgeType.NET_CONNECT.value
+    assert ev_net_connect.obj_type == NodeType.network, (
+        f"target_host_3389 must be NodeType.network (IP:3389 notation), "
+        f"got {ev_net_connect.obj_type}. Single-host approximation models the "
+        f"target as a remote network endpoint, not a separate host subgraph."
+    )
+    assert (
+        "3389" in ev_net_connect.obj
+    ), f"target_host network node must contain port 3389, got {ev_net_connect.obj!r}"
+
+
+def test_t1021_001_labels_are_1() -> None:
+    """All T1021.001 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1021_001_rdp import T1021001RDP
+
+    events = _make_template_call(T1021001RDP)
     for ev in events:
         assert ev.attributes.get("label") == 1
