@@ -864,4 +864,76 @@ Phase 4 全 null 闭环不是放弃 fusion claim 是把 fusion validation 真实
 
 ---
 
-*下一条记录：Phase 5 RAPA 攻击模板正式实施（等 user launch spec）。*
+## Phase 5 / Checkpoint 15 — TTP 模板扩展 5 → 20 闭环（六 Cycle 完整推进 + 4-step pattern + RFC-first 纪律 + STAGE-but-NO-COMMIT controller-managed）
+
+- **完成日期**：2026-05-08
+- **Commits**: Cycle A `6aa8f5c` T1055 + Cycle B `719fe94` T1068 + Cycle C `b20ef2c` T1021.001 + Cycle D `72945e1` batch (T1566.001+T1078+T1057+T1083) + Cycle E `a869a6e` batch (T1027+T1070.004+T1053.005+T1543.003) + 本 commit Cycle F batch (T1190+T1560.001+T1486+T1490) + Checkpoint 15 闭环。
+- **方法论**：subagent-driven-development skill 第三次正式应用（继 Checkpoint 12 + Checkpoint 13 之后），三轮 individual review (Cycles A-C 风险前置) + 三轮 batch-of-4 review (Cycles D-F)。Hybrid 4-step pattern + STAGE-but-NO-COMMIT controller-managed commit + Cycle B-F 三级 finding 分类协议 + RFC-first 纪律深度落地。
+
+### 6 Cycle 完整推进记录
+
+| Cycle | TTPs | Schema workaround | Tests added | Pattern |
+|---|---|---|---|---|
+| A (`6aa8f5c`) | T1055 Process Injection | #1 dual-node svchost typing | 7 | Individual 4-step + 1 fix dispatch (docstring+independence test+grad-norm comment) |
+| B (`719fe94`) | T1068 Exploitation for PrivEsc | #2 priv-grant + vuln_driver-as-file reuse from T1003.001 | 7 | Individual 4-step + 1 Tier 2 fix (ruff isort import wrap) |
+| C (`b20ef2c`) | T1021.001 RDP | #3 single-host approximation + USER_EXPLICIT_LOGON | 7 | Individual 4-step + 0 fix |
+| D (`72945e1`) | T1566.001 + T1078 + T1057 + T1083 | none (4 zero-workaround) | 28 | Batch 4-step + 0 fix |
+| E (`a869a6e`) | T1027 + T1070.004 + T1053.005 + T1543.003 | T1053.005+T1543.003 reuse T1547.001 registry-as-file | 28 | Batch + controller-direct verification（spec+code-quality reviewer subagent dispatch hit org usage limit） |
+| F (本 commit) | T1190 + T1560.001 + T1486 + T1490 | #4 T1190 webshell-write + T1490 system-object-as-file reuse from T1547.001 | 29 | Batch 4-step + 1 Tier 2 fix (T1490 seed-test 加 USER_PRIV_GRANT 操作断言) |
+
+### Schema workaround inventory 完整 4 entries 摘要
+
+1. **#1 T1055 dual-node svchost typing**: svchost.exe 同时作 file node (HANDLE_REQUEST 目标) 与 process node (NET_CONNECT 主体)，用 `svchost_handle` (file) + `svchost_injected` (process) 两 distinct node ID。Checkpoint 17 升级路径：添加 `(process, HANDLE_REQUEST/HANDLE_DUPLICATE/HANDLE_CLOSE, process)` 三个三元组到 ALLOWED_EDGE_TRIPLES。
+2. **#2 T1068 priv-grant**: `(process, USER_PRIV_GRANT, process)` 缺失，workaround 用 `(seed_user, USER_PRIV_GRANT, exploit_elevated.exe)`。Checkpoint 17 升级路径：添加 process-to-process priv grant 三元组或现有 USER_PRIV_GRANT 边 attribute dict 加 `process_subject: bool` flag。
+3. **#3 T1021.001 single-host approximation**: 多主机 lateral movement 跨 source + target，ATLAS 单主机 schema 只能建模 source view。Checkpoint 17 不升级——单 host schema 限制，Phase 9 DARPA TC E3 跨主机数据集时考虑。
+4. **#4 T1190 webshell-write**: `(network, *, process)` 反向入站三元组缺失，workaround 用 `(process, FILE_WRITE, file)` 写 webshell 替代 network ingress event。理由：(a) ATLAS 单主机 EDR 视角合理（监控 web server 进程内部活动）；(b) 与 T1003.001 lsass-as-file 同模式；(c) 不扩反向 process-as-target 边类型避免开 Pandora's box（很多 inbound 操作）。Checkpoint 17 不升级——同 #3 性质，Phase 9 多主机数据集时考虑 (network, *, process) 入站边类型扩展。
+
+### Pattern reuse instances（单 entry 对单 gap 不对单 TTP 纪律）
+
+- **registry-as-file**: T1547.001 entry-establishing → T1053.005 (Cycle E task scheduler key) + T1543.003 (Cycle E service registry key) + T1490 (Cycle F BCD store) reuse
+- **lsass-as-file generalization "system-object-as-file"**: T1003.001 entry-establishing → T1068 (Cycle B vuln_driver.sys) + T1490 (Cycle F shadow_copy_volume) reuse
+
+### Placeholder notes 完整列表
+
+**T1486 ransomware-mimicry hard negative pair Checkpoint 16 sanity check note**（multi-anchor 三处落档）：
+
+> Checkpoint 16 必须做 T1486 与对应 ransomware-mimicry hard negative pair 即合法磁盘加密软件批量加密用户文件 anonymize-then-classify 单独 sanity check 期望 BERT-only F1 显著降级到 < 0.6 这条 sanity check 不能在整体 hard negative library 层面做必须做单独 pair。
+
+落档位置：(i) `src/loghetero/data/attack_templates/t1486_ransomware.py` 模块 docstring + (ii) `src/loghetero/data/attack_templates/t1486_ransomware.py` 类 docstring + (iii) 本 Checkpoint 15 closure commit message body。Checkpoint 16 launch 时本 placeholder 作为 hard requirement 输入。
+
+### 三级 finding 分类协议实测应用（Cycle B-F precedent）
+
+- **Tier 1 schema/atk_/timestamp violations** → MUST_FIX 不允许 docstring 绕过：0 实例（所有 cycle pre-write schema check + spec compliance reviewer 双重把关无 Tier 1 触发）
+- **Tier 2 test inadequacy / coverage gap** → MUST_FIX：4 实例（Cycle A 3 处 docstring/test rationale + Cycle B 1 处 ruff isort + Cycle F 1 处 T1490 seed-test USER_PRIV_GRANT 断言）全部应用 fix
+- **Tier 3 reviewer-proposed TTP 语义改进 / 建模优化 / 机制对齐** → default accept-as-is + docstring note 透明记录：多实例（Cycle A injector_elevated dangling + 多 cycle 各种语义观察）全部 docstring note 处理无 spec rework
+
+Tier 边界争议 NEEDS_CONTEXT 0 实例——Cycle B-F 内 implementer 与 reviewer 对 Tier 分类无争议。
+
+### 关键决策点
+
+- **User 否决 Option γ 选 Phase 4 全 null 闭环路径同时认可 Phase 5 RAPA 推进独立性**：Phase 5 与 Phase 4 fusion validation 状态独立，即使 Phase 7-8 fusion 严格 gate fail 触发 paper pivot，Phase 5 RAPA 实施仍是创新点二的核心 contribution 不浪费工时。本决策让 Checkpoint 15 实施在 Phase 4 全 null 状态下推进无阻力。
+- **Hybrid 4-step pattern (3 individual + 3 batch)**：风险前置 cycles A-C 个体 review 让 schema workaround 风险充分暴露；batch cycles D-F 让 Low-cost 标准 schema TTPs 高效推进。Cycle E batch-of-4 controller-direct verification（subagent dispatch hit org usage limit 时的 pragmatic 协议变通）+ Cycle F 4-step pattern 完整恢复展示了协议在不同资源约束下的灵活性。
+- **Inventory 设计纪律**：单 entry 对单 schema gap 不对单 TTP，pattern reuse cross-reference 现有 entry 而非重复 entry。registry-as-file pattern 在 4 个 TTPs 中 reuse + system-object-as-file 在 2 个 TTPs 中 reuse，inventory 保持紧致 4 entries。
+- **STAGE-but-NO-COMMIT controller-managed commit**：从 Checkpoint 14.5 protocol violation lesson 沿用至 Phase 5 全部 6 cycles 无违反。implementer / reviewer subagents 一律 stage uncommitted changes 报告 DONE_STAGED，controller 验证 spec + code quality 双重 review verdicts 后才 commit。Cycle F 是该协议第 13 次成功应用（Path B' + Cycle A-F 7 次实施 + 6 次 fix）。
+
+### 执行 Checkpoint 15 launch spec 完成清单
+
+- [x] 15 TTP 模板扩展（Phase 4 已 hand-coded 5 个 + Phase 5 新 15 个 = 20 templates total，10 distinct tactics 覆盖）
+- [x] Phase 5 module-level constants pattern 确立（vs T1003.001 class-level constants 留 Phase 11+ codebase consistency 议程）
+- [x] Schema workaround inventory 4 entries filled（pre-declared #4 T1190 在 Cycle F 落地）
+- [x] T1486 ransomware-mimicry pair Checkpoint 16 sanity check note 三处 anchor 落档
+- [x] T1547.001 registry-as-file pattern reuse 在 T1053.005 + T1543.003 + T1490（BCD store）+ T1003.001 lsass-as-file pattern reuse 在 T1068 + T1490（shadow_copy）—— 单 entry 对单 gap 纪律
+- [x] cumulative implementer dispatches 7 / cap 22（远在预算内）+ wall-clock 远在 6.5 day cap 内
+- [x] 137 unit tests pass + ruff + mypy 清
+- [x] 6 cycle controller-managed commits all push 到 origin (Cycle E 之前)
+- [x] PROGRESS.md / CHECKPOINT_LOG.md 同步本 entry
+
+### 下一步
+
+**Phase 5 / Checkpoint 16 hard negative 库设计** 等 user 下达 launch spec：6 类 GPT critique-driven hard negative + 8 类 implementer-recommended explicit cross-reference table（Tightening 1）+ T1486 ransomware-mimicry pair 单独 lexical-blind sanity check（Tightening 2）+ 18-30 hard negative 模板设计实施。
+
+后续 Phase 5 sub-checkpoints: 17 ALLOWED_EDGE_TRIPLES schema 扩展（含 4 entries inventory 升级）+ 18 RAPA 注入框架重构（含字段级 mask 添加机制实施）+ 19 整体集成 + synthetic dataset + sanity check + v0.5-rapa tag 申请。
+
+---
+
+*下一条记录：Phase 5 / Checkpoint 16 hard negative 库设计（等 user launch spec）。*

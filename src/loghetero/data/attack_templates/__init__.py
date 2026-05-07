@@ -20,6 +20,10 @@ Phase 5 templates (Checkpoint 15 Cycle A-F, RFC adjudication):
     - T1070.004: Indicator Removal: File Deletion via cleanup_tool (7 events)
     - T1053.005: Scheduled Task persistence + execution (8 events)
     - T1543.003: Windows Service persistence + execution (7 events)
+    - T1190:     Exploit Public-Facing Application / webshell (7 events, workaround #4)
+    - T1560.001: Archive Collected Data via Utility / 7zip (8 events)
+    - T1486:     Data Encrypted for Impact / Ransomware (9 events)
+    - T1490:     Inhibit System Recovery / vssadmin + bcdedit (8 events)
 
 Usage::
 
@@ -46,8 +50,14 @@ from loghetero.data.attack_templates.t1070_004_file_deletion import T1070004File
 from loghetero.data.attack_templates.t1071_001_web_protocols import T1071001WebProtocols
 from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
 from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
+from loghetero.data.attack_templates.t1190_exploit_public_facing import T1190ExploitPublicFacing
+from loghetero.data.attack_templates.t1486_ransomware import T1486Ransomware
+from loghetero.data.attack_templates.t1490_inhibit_system_recovery import (
+    T1490InhibitSystemRecovery,
+)
 from loghetero.data.attack_templates.t1543_003_windows_service import T1543003WindowsService
 from loghetero.data.attack_templates.t1547_001_registry_run_keys import T1547001RegistryRunKeys
+from loghetero.data.attack_templates.t1560_001_archive_via_utility import T1560001ArchiveViaUtility
 from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
     T1566001SpearphishingAttachment,
 )
@@ -69,6 +79,10 @@ ALL_TEMPLATES: list[AttackTemplate] = [
     T1070004FileDeletion(),
     T1053005ScheduledTask(),
     T1543003WindowsService(),
+    T1190ExploitPublicFacing(),
+    T1560001ArchiveViaUtility(),
+    T1486Ransomware(),
+    T1490InhibitSystemRecovery(),
 ]
 
 __all__ = [
@@ -89,5 +103,9 @@ __all__ = [
     "T1070004FileDeletion",
     "T1053005ScheduledTask",
     "T1543003WindowsService",
+    "T1190ExploitPublicFacing",
+    "T1560001ArchiveViaUtility",
+    "T1486Ransomware",
+    "T1490InhibitSystemRecovery",
     "ALL_TEMPLATES",
 ]

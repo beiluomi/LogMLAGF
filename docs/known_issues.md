@@ -380,13 +380,14 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 **触发原因**：Phase 5 / Checkpoint 15 RFC 决议 7 处 user 裁定中确认接受 3 处 schema workaround，作为 Checkpoint 17 schema 扩展时的 upgrade plan inventory anchor。User 加严要求 Checkpoint 15 实施过程中如发现新的 schema workaround 需求 implementer 必须在该 TTP 完成时增补到本 inventory + status update，不允许 silent skip。
 
-**当前已识别 schema workaround 清单（Checkpoint 15 RFC 决议 2026-05-08）**：
+**当前已识别 schema workaround 清单（Checkpoint 15 RFC 决议 2026-05-08；Cycle F 落地 4 条）**：
 
 | # | TTP | Workaround 描述 | Checkpoint 17 upgrade plan | Phase 1 retroactive 数据影响 |
 |---|---|---|---|---|
 | 1 | **T1055 Process Injection** | svchost.exe 同时作 file node（HANDLE_REQUEST 目标）与 process node（NET_CONNECT 主体）。Workaround：用两个 distinct node ID 即 `svchost_handle` (file node) + `svchost_injected` (process node)，graph 通过 proximity / 时间戳邻近隐式表示注入关系，不显式建模 type-change 边 | 添加 explicit `(process, HANDLE_REQUEST, process)` 边类型 + `(process, HANDLE_DUPLICATE, process)` + `(process, HANDLE_CLOSE, process)` 三个三元组到 ALLOWED_EDGE_TRIPLES。EdgeType enum 同步加 process-handle 类别。HTGN edge_type one-hot 维度从 29 → 32 同步更新含 `test_edge_type_one_hot_uses_29_dim` 测试 | 不需要 retroactive 重 parse Phase 1 数据（ATLAS 原数据没有这种边类型，Checkpoint 17 后只在 RAPA injection 中产生新边类型，Phase 1 已 parsed 异构图保持原状）|
 | 2 | **T1068 Exploitation for PrivEsc** | step 5 privilege elevation event 缺 `(process, USER_PRIV_GRANT, process)` 三元组。Workaround：用 `(seed_user, USER_PRIV_GRANT, exploit_elevated.exe)` 把权限归 seed user 而非 process，语义近似但不破坏 audit | 添加 `(process, USER_PRIV_GRANT, process)` 三元组到 ALLOWED_EDGE_TRIPLES，OR 在现有 USER_PRIV_GRANT 边的 attribute dict 加 `process_subject: bool` flag 显式标记 process-level priv grant。前者更 type-safe 后者更 minimal | 同 T1055，不需 retroactive |
 | 3 | **T1021.001 RDP** | 多主机 lateral movement 跨 source + target 两台主机，ATLAS 单主机 schema 只能建模 source view。Workaround：建模 source host 视角 step 5-6 简化为 "RDP client process drops file and executes it" docstring 明记限制 | **不在 Checkpoint 17 内升级**——单 ATLAS host schema 无法支持多主机。留作 **Phase 9 DARPA TC E3 跨主机数据集** 集成时考虑（DARPA TC E3 含 host-to-host 通信关系 + 多 endpoint coordination） | 不适用 |
+| 4 | **T1190 Exploit Public-Facing App** | ALLOWED_EDGE_TRIPLES 无 `(network, *, process)` 反向三元组——所有 network 边都是 `(process, *, network)`。自然建模的 initial compromise 事件是 attacker HTTP request 到达 web server 的入站网络连接（network -> process 边），schema 无法表示。Workaround：用 `(apache.exe, FILE_WRITE, webshell.php)` 即 web server 进程写 webshell 到磁盘替代入站网络事件。理由：(a) ATLAS 单主机 schema EDR 视角下监控工具观察 apache.exe 的文件写入活动（webshell 落地）而非外部连接源，符合 EDR 建模习惯；(b) 与 T1003.001 lsass-as-file workaround 同模式（都用 file node 表示进程层动作）；(c) 不扩 ALLOWED_EDGE_TRIPLES 添加 `(network, *, process)` 入站边类型，避免开 Pandora's box（很多 inbound 操作类别）。Code: `t1190_exploit_public_facing.py` event 2 (webshell-write)。 | **不在 Checkpoint 17 内升级**——与 T1021.001 (#3) 同性质的 ATLAS 单主机 schema 限制。留作 **Phase 9 DARPA TC E3 跨主机数据集** 集成时考虑，届时 `(network, *, process)` 入站边类型可作为新三元组添加到 ALLOWED_EDGE_TRIPLES | 不适用 |
 
 **Checkpoint 15 实施过程中 inventory 增补协议**：
 
