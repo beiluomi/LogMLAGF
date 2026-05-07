@@ -13,10 +13,10 @@
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：`1b16d25`（Option α 补充诊断 inconclusive 落档；前置 Checkpoint 14 Option β 形式闭环 commit `8204b4a` + RFC 决议 docs commits 含 `2eb712e` Phase 7 deep injection 训练成本预算提醒 + `241f30f` Checkpoint 13 Option C 三条件落档 + `2c89cb5` Phase 5 hard negative benign admin behaviors 议程）
-- **Message**：`test(phase4): Checkpoint 14 supplementary diagnostic (α frozen MLMHead)`
+- **Hash**：`682f819`（Option α' 补充诊断 refinement Category 1 落档；前置 Option α 原始 commit `1b16d25` inconclusive + Checkpoint 14 Option β 形式闭环 commit `8204b4a`）
+- **Message**：`test(phase4): Checkpoint 14 supplementary diagnostic refinement (α' pretrained MLMHead)`
 - **Date**：2026-05-07
-- **Option α status**：**INCONCLUSIVE**——Gate 5 fail（random-init frozen MLMHead → 30k-class 投影无语义锚 → 梯度信号 uniformly random → 50 epoch 下 loss 仅降 64.6% < 90% 阈值，无法 memorize 8 样本）。Gates 3/4 SKIPPED 早退出。Implementer 分析：不是 fusion incapacity 而是 random-head gradient noise pathology。**user 预设的 α PASS / α FAIL 二分外的第三类情形**——需要 user 裁定继续路径：(a) 进 14.5 直接走，α inconclusive 不视为 architectural concern；(b) 先做 α'（pretrained BERT MLM head 加载到 ModifiedMLMHead 再冻结）refine 测试；(c) 其他路径。
+- **Option α' result**：**Category 1 — Gate 5 FAIL**——pretrained-frozen MLMHead 配置下 epoch1 0.6532 → epoch50 0.1197 reduction 81.7% < 90% 阈值。Gates 3/4 SKIPPED 早退出。**Confound 真实但不充分**：α 原始 epoch50 loss 3.62 vs α' epoch50 loss 0.12 是 30x 改善证明 random-head gradient-noise confound 真实存在但即使消除 confound，HTGN + CrossModalAttention 在 frozen-head pressure 下仍无法 fully converge MLM loss → **真 fusion incapacity 强信号**。按 user 预设解读框架 Category 1 含义：14.5 fail 时直接进架构级 RFC 评估 Option γ + 其他架构修复路径，**不需要再做 root cause 回合**。14.5 仍立即启动——fusion 在 anomaly classification loss 结构下可能 engage（loss 结构与 MLM 不同，提供 graph-derived discriminative signal pressure 是 anomaly detection 任务的天然要求）。Phase 12 论文素材已追加 entry "Cross-modal fusion engagement diagnostic methodology: α (random-init confound) vs α' (pretrained-head pressure isolation)" 作为 paper Methods 章节工程严谨性 evidence。
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
 
@@ -65,6 +65,9 @@
 | 41 | `2eb712e` | docs / Phase 7 deep injection | docs(known_issues): Phase 7 待办 add deep injection 训练成本预算提醒（Checkpoint 14 RFC-1 Option A 触发）|
 | 42 | `8204b4a` | checkpoint 14 closure | feat(phase4): Checkpoint 14 closure with 5/7 PASS + 2/7 informational null finding (β) |
 | 43 | `1b16d25` | option α diagnostic | test(phase4): Checkpoint 14 supplementary diagnostic (α frozen MLMHead) |
+| 44 | `ddf90c8` | docs / α inconclusive | docs(progress): record Option α inconclusive result + 14.5 path RFC pending |
+| 45 | `682f819` | option α' refinement | test(phase4): Checkpoint 14 supplementary diagnostic refinement (α' pretrained MLMHead) |
+| 46 | `<this commit>` | docs / α' Category 1 | docs(progress): record Option α' Category 1 (fusion incapacity strong signal) + Checkpoint 14.5 dispatch |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 / Phase 4 设计偏离 + 经验启发式校准）
 
