@@ -617,6 +617,54 @@ Checkpoint 14.5 异常检测前置 probe 是创新点一融合机制效用的真
 
 **审计 anchor**：本条目是 Checkpoint 14 Option β 决议（2026-05-07，user 拍板"5/7 PASS + 2/7 informational null finding 闭环路径 + Option α 30 分钟补充诊断 + Option γ 推迟到 14.5 之后视情况启用"）的 paper-grade audit trail，与 Checkpoint 14 commit message body + Cross-modal fusion init-state asymmetry 条目一同构成完整 Phase 4 收尾决议链。
 
+### Cross-modal fusion engagement diagnostic methodology: α (random-init confound) vs α' (pretrained-head pressure isolation)
+
+**Two-step diagnostic narrative**:
+
+Option α（commit `1b16d25`）原始设计使用 random-init frozen ModifiedMLMHead 来测试 fusion engagement 能力。设计假设：若 MLMHead 冻结，模型只能通过 CrossModalAttention 路由图信息来降低 MLM 损失，从而强制 fusion engage。实测结果：Gate 5 FAIL（loss reduction 64.6% < 90% 阈值），inconclusive。
+
+根因诊断：random-init frozen MLMHead 的 30,678 类投影没有语义锚点，梯度信号对 CrossModalAttention 的反向传播是均匀随机方向 —— 50 epoch 内无论 fusion 能力如何都无法收敛。这是实验设计本身的 **gradient noise confound**，不是 fusion incapacity 的证据。
+
+α' 修复设计（本次诊断，2026-05-07）：将 `BertForMaskedLM`（bert-base-uncased）的预训练权重载入 `ModifiedMLMHead`，然后冻结。具体加载协议：dense.weight/bias 和 layer_norm.weight/bias 直接从 `cls.predictions.transform` 复制；decoder.weight 前 30,522 行从 `cls.predictions.decoder.weight` 直接复制；decoder.weight 后 156 行用 Phase 2 synonym-mean utility（`init_special_token_embeddings`）初始化；decoder.bias 前 30,522 维从 `cls.predictions.bias` 复制；decoder.bias 后 156 维 zero init。加载后 `model.mlm_head.requires_grad_(False)` 冻结整个头部。
+
+**Lesson learned**:
+
+> **"frozen-head pressure isolation 实验中必须用 pretrained head 而非 random-init head 避免 gradient noise confound"**——这是 cross-modal fusion engagement 类实验的通用工程严谨性原则。任何需要通过"冻结某个下游头部来强制 attention 路径 engage"的设计，必须保证头部本身有正确的语义锚点，否则梯度方向随机化会系统性阻止融合路径学习，无论融合容量是否充足。
+
+**α' 三类结果对应的诊断含义（pre-decided interpretation framework）**:
+
+| Category | 条件 | 诊断含义 |
+|---|---|---|
+| Category 1 | Gate 5 FAIL | 真实 fusion incapacity 强信号。排除了 gradient-noise confound 后仍不能过 Gate 5，说明 HTGN + CrossModalAttention 本身容量或优化路径存在架构级问题。 |
+| Category 2 | Gate 5 PASS + Gates 3/4 FAIL | Fusion engages（能降 MLM 损失）但 attention 形态不健康（entropy > 0.95 或 cos-sim ≈ 1）。fusion 路由了但 attention 机制形态待优化。 |
+| Category 3 | Gate 5 PASS + Gates 3/4 PASS | Fusion fully functional 明确证据。三关全过说明 pretrained head 足够提供梯度语义锚点 + CrossModalAttention 能学到非平凡 attention 权重 + 图路径对 text representation 有可测影响。 |
+
+**实测 α' 结果（2026-05-07）**:
+
+| Gate | 结果 | 数字 |
+|---|---|---|
+| Gate 5 | **FAIL** | epoch-1 loss = 0.6532，epoch-50 loss = 0.1197，reduction = 81.7%（阈值 > 90%）。loss_epoch50 < 0.3 通过，但 reduction 不足 |
+| Gate 3 | SKIPPED（Gate 5 fail early exit） | — |
+| Gate 4 | SKIPPED（Gate 5 fail early exit） | — |
+
+**落入 Category 1**：Gate 5 FAIL with pretrained frozen MLMHead → real fusion incapacity 强信号。
+
+注意 loss reduction 81.7% 与 α 的 64.6% 相比有明显改善（+17.1pp），表明 pretrained head 确实改善了梯度信号质量，但仍未突破 90% 阈值。这说明：α 的 gradient noise confound 被成功消除，但在消除 confound 后 HTGN + CrossModalAttention 在 50 epoch 内仍不能将 MLM 损失充分压缩。融合路径已比 α 更有效（loss 更低：0.12 vs α 的 3.6），但优化效率仍受架构或超参数（lr、epoch 数等）制约。
+
+**14.5 implication（pre-decided Category 1）**：14.5 fail 时直接进架构级 RFC 评估 Option γ（可学习 scaling factor）加入与其他架构修复路径，不需要再做 root cause 回合。
+
+**Phase 12 论文 Methods 章节使用方式**:
+
+本双步诊断方法（α random-init → 实测 fail → 根因 gradient noise → α' pretrained head → Category 1 result）作为 "我们如何区分 fusion incapacity 与 experimental design confound 的工程严谨性方法论" contribution evidence 写入 Methods 章节。具体使用场景：
+
+1. **工程严谨性叙事**：我们在 Checkpoint 14 额外实施了 30 分钟补充诊断（α'）以排除 α 的实验设计缺陷可能掩盖 fusion capacity 的可能性。α' 结果（Category 1 FAIL）与 Option β informational null finding 共同构成"cross-modal fusion 在 8-sample MLM overfit 这一 task pressure 下无法充分 engage 图路径"的诊断闭环。
+
+2. **审稿人验证点**：α 与 α' 形成对照实验：同样配置但 MLMHead 初始化不同（random vs pretrained）。α loss epoch-50 = 3.6，α' loss epoch-50 = 0.12，差距 30x 证实了 pretrained head 对优化的影响是实质性的。两者在 reduction 阈值上均 FAIL 说明问题不仅是梯度噪声，而是更深层的融合路径压力结构问题（与 Option β 根因"MLMHead 独立容量充足"互相补充而非矛盾——freeze MLMHead 后容量不再独立充足，但 HTGN+CrossModalAttention 在 8-sample 50-epoch 下仍无法充分补偿）。
+
+3. **方法论 contribution evidence**：cf. prior work 在 cross-modal fusion 领域通常直接用 trained-state metrics 报告 attention，没有显式诊断实验设计是否引入 confound。我们额外做 α/α' 两步诊断，这种工程严谨性本身可作为 Methods 章节的 contribution evidence。
+
+**审计 anchor**：α 失败的 commit `1b16d25` + 本 α' 修复 commit（`scripts/checkpoint14_option_alpha_prime_diagnostic.py`）+ user pre-decided interpretation framework（三类 category 预定义于 α' launch spec，2026-05-07）共同构成本条目的完整 audit trail。
+
 ## Phase 7 待办
 
 ### Gradient clipping 在 Phase 7 联合预训练 launch spec 必须显式启用（2026-05-06，Checkpoint 14 Gate 2 实测 grad_norm 2e14 触发）
