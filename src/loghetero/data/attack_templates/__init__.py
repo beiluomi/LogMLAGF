@@ -10,6 +10,7 @@ Phase 4 templates (RFC-14.5-1 accepted sequences, RFC-14.5-10 hand-coded):
 
 Phase 5 templates (Checkpoint 15 Cycle A-F, RFC adjudication):
     - T1055:     Process Injection via svchost (8 events)
+    - T1068:     Exploitation for Privilege Escalation via kernel driver (8 events)
 
 Usage::
 
@@ -25,6 +26,9 @@ from loghetero.data.attack_templates.t1003_001_lsass_memory import T1003001Lsass
 from loghetero.data.attack_templates.t1041_exfiltration import T1041Exfiltration
 from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
 from loghetero.data.attack_templates.t1059_001_powershell import T1059001PowerShell
+from loghetero.data.attack_templates.t1068_exploitation_for_privesc import (
+    T1068ExploitationForPrivEsc,
+)
 from loghetero.data.attack_templates.t1071_001_web_protocols import T1071001WebProtocols
 from loghetero.data.attack_templates.t1547_001_registry_run_keys import T1547001RegistryRunKeys
 
@@ -35,6 +39,7 @@ ALL_TEMPLATES: list[AttackTemplate] = [
     T1547001RegistryRunKeys(),
     T1041Exfiltration(),
     T1055ProcessInjection(),
+    T1068ExploitationForPrivEsc(),
 ]
 
 __all__ = [
@@ -45,5 +50,6 @@ __all__ = [
     "T1547001RegistryRunKeys",
     "T1041Exfiltration",
     "T1055ProcessInjection",
+    "T1068ExploitationForPrivEsc",
     "ALL_TEMPLATES",
 ]
