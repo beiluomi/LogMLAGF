@@ -376,6 +376,35 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 **审计 anchor**：本条目是 Checkpoint 14.5 RFC-14.5-1 决议（2026-05-07，user 拍板"接受 implementer 提议事件序列 + T1547.001 与 T1003.001 工程妥协 + docstring rationale 落档"）的 audit trail。Phase 5 启动时与 hard negative benign admin behaviors 议程一同作为 RAPA 模板设计阶段的 design constraint 输入。
 
+### Checkpoint 17 schema workaround inventory tracking（2026-05-08，Phase 5 Checkpoint 15 RFC Tightening 4 触发）
+
+**触发原因**：Phase 5 / Checkpoint 15 RFC 决议 7 处 user 裁定中确认接受 3 处 schema workaround，作为 Checkpoint 17 schema 扩展时的 upgrade plan inventory anchor。User 加严要求 Checkpoint 15 实施过程中如发现新的 schema workaround 需求 implementer 必须在该 TTP 完成时增补到本 inventory + status update，不允许 silent skip。
+
+**当前已识别 schema workaround 清单（Checkpoint 15 RFC 决议 2026-05-08）**：
+
+| # | TTP | Workaround 描述 | Checkpoint 17 upgrade plan | Phase 1 retroactive 数据影响 |
+|---|---|---|---|---|
+| 1 | **T1055 Process Injection** | svchost.exe 同时作 file node（HANDLE_REQUEST 目标）与 process node（NET_CONNECT 主体）。Workaround：用两个 distinct node ID 即 `svchost_handle` (file node) + `svchost_injected` (process node)，graph 通过 proximity / 时间戳邻近隐式表示注入关系，不显式建模 type-change 边 | 添加 explicit `(process, HANDLE_REQUEST, process)` 边类型 + `(process, HANDLE_DUPLICATE, process)` + `(process, HANDLE_CLOSE, process)` 三个三元组到 ALLOWED_EDGE_TRIPLES。EdgeType enum 同步加 process-handle 类别。HTGN edge_type one-hot 维度从 29 → 32 同步更新含 `test_edge_type_one_hot_uses_29_dim` 测试 | 不需要 retroactive 重 parse Phase 1 数据（ATLAS 原数据没有这种边类型，Checkpoint 17 后只在 RAPA injection 中产生新边类型，Phase 1 已 parsed 异构图保持原状）|
+| 2 | **T1068 Exploitation for PrivEsc** | step 5 privilege elevation event 缺 `(process, USER_PRIV_GRANT, process)` 三元组。Workaround：用 `(seed_user, USER_PRIV_GRANT, exploit_elevated.exe)` 把权限归 seed user 而非 process，语义近似但不破坏 audit | 添加 `(process, USER_PRIV_GRANT, process)` 三元组到 ALLOWED_EDGE_TRIPLES，OR 在现有 USER_PRIV_GRANT 边的 attribute dict 加 `process_subject: bool` flag 显式标记 process-level priv grant。前者更 type-safe 后者更 minimal | 同 T1055，不需 retroactive |
+| 3 | **T1021.001 RDP** | 多主机 lateral movement 跨 source + target 两台主机，ATLAS 单主机 schema 只能建模 source view。Workaround：建模 source host 视角 step 5-6 简化为 "RDP client process drops file and executes it" docstring 明记限制 | **不在 Checkpoint 17 内升级**——单 ATLAS host schema 无法支持多主机。留作 **Phase 9 DARPA TC E3 跨主机数据集** 集成时考虑（DARPA TC E3 含 host-to-host 通信关系 + 多 endpoint coordination） | 不适用 |
+
+**Checkpoint 15 实施过程中 inventory 增补协议**：
+
+implementer 在每个 TTP 模板完成时检查是否触发新的 schema workaround：
+
+- 如发现 ALLOWED_EDGE_TRIPLES 当前不支持的边类型（即使有现有 workaround 借用如 file-node-as-X 也算）必须在 TTP 完成的 status update 中报告"新增 schema workaround #N: <description>"
+- Status update 触发本 inventory entry 表格增补 + Checkpoint 17 RFC 议程扩展
+- **不允许 silent skip**——即使 implementer 认为某个 workaround "trivial" 也必须 inventory，避免 Checkpoint 17 时遗漏
+
+**Checkpoint 17 RFC 必须给出的 deliverables**：
+
+1. 完整 workaround 列表（本 inventory 表当前状态 + Checkpoint 15 实施过程中增补条目）
+2. 每个 workaround 的 upgrade 协议即代码改动范围（哪些文件 / 边类型定义 / 测试 update）
+3. Phase 1 已 parsed 数据是否需要 retroactive 更新（user 在 Phase 5 launch spec 中提到 二选一：(a) 重新 parse 全部 ATLAS vs (b) 仅 RAPA injection 用新边类型）
+4. HTGN edge_type one-hot 维度更新 + 测试锁定值更新（cf. `经验启发式校准记录::Spec 与代码常数同步纪律` 范式）
+
+**审计 anchor**：本条目是 Phase 5 / Checkpoint 15 RFC Tightening 4（2026-05-08 user 裁定）的 audit trail，Checkpoint 17 RFC 启动时本条目作为 hard inventory input。Checkpoint 15 实施过程中 implementer 每个 TTP 完成的 status update 必须 reference 本条目作为增补 anchor。
+
 ## Phase 12 论文素材
 
 ### Phase 3 sanity AUC 演进数字（2026-05-06，Checkpoint 10 Option A conditional pass 对应 paper 措辞预定）
