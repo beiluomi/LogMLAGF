@@ -789,4 +789,79 @@ Reviewer 对 BERT-only F1 = 0.9697 的统计 sanity 解释：
 
 ---
 
-*下一条记录：Phase 4 收尾路径——Option γ 实施 OR Phase 4 全 null 闭环进 Phase 5（等 user 裁定）。*
+## Phase 4 closure — 全 null 闭环路径（user 否决 Option γ，2026-05-07）
+
+- **完成日期**：2026-05-07
+- **Commits**：本 commit（Phase 4 全 null 闭环 + PROGRESS / CHECKPOINT_LOG 同步）+ 后续 docs commit（Phase 7-8 严格 gate + 诚实性契约 + 论文叙事 entry）+ v0.4-fusion tag
+- **决策**：user 否决 Option γ 选 Phase 4 全 null 闭环路径
+
+### Option γ 否决 reasoning（user 与 controller 推荐相反的最终决策）
+
+Controller 推荐 Option γ 实施。User 否决，理由严谨：
+
+1. **四轮 null 共同特征指向 cross-attention 输出 content-quality 问题非 amplitude 不够**：C14 Gates 3/4 显示 trained-state cross-attention 学到 ~0 contribution，14.5 Path B' 显示 cross-attention 输出 actively interfere（fusion -0.0998 vs BERT-only）。这两种现象都不是输出量级不够而是产生的内容本身有问题（零或错）。Option γ 的 λ scaling factor 设计假设 cross-attention 输出有用只是量级不够，但 λ 增加幅度只会让零仍是零或让错变得更错，不能让错变成对。
+2. **Option γ 大概率 SGD 学到 λ → 0 让 fusion 实质 bypass**：1-2 周工时换一个 cleaner 的同样 null 信号 ROI 不可接受。真正能修复 cross-attention 输出质量的干预（attention mask 放宽 + HTGN end-to-end 训练 + cross-attention 容量增强）不是 1-2 周工时而是 4-6 周工时，那就跨越了 Phase 4 修复与 Phase 5+ 推进的边界纪律。
+3. **四轮 null 共同特征是任务结构都不是 cross-modal fusion 设计的目标使用场景**：Link prediction 是 structure-determined task；MLM overfit 是 8 sample 单样本记忆任务；α' 是 frozen pressure isolation 没有 task supervision 多样性；14.5 anomaly probe 是 BERT 单独 0.97 F1 已 saturate 的 lexical-rich 简化任务。Fusion 是为 Phase 7 大规模联合预训练 + InfoNCE 跨模态对比损失 + Phase 8 真实异常检测设计的，**InfoNCE 对比损失天然要求 fusion 提供 graph-discriminative 信号否则正负样本对无法区分**——这是 fundamental different pressure structure。
+4. **Phase 4 preliminary tests 的全 null 是合理 prior 不是 fusion 不工作的最终判定**：Phase 7-8 才是 fusion 该 engage 的真实场景。
+
+### 4 个 informational null finding chain（完整 audit trail）
+
+| # | Checkpoint | 任务结构 | 关键数字 | 根因 |
+|---|---|---|---|---|
+| 1 | C11.2-γ-1 | structure-determined link prediction + random edge masking + structural negative sampling | 4 档 BERT 集成 AUC 全聚 0.811-0.815 std 0.007-0.016 无 statistical 差异 | random edge masking + structural negatives 让图拓扑信号完全决定 link prediction，BERT 语义特征通过 input-feature 通道无 lift |
+| 2 | C14 Gates 3/4 | 8-sample MLM overfit + frozen BERT + trainable HTGN/CrossModalAttention/MLMHead | trained-state Gate 3 entropy 6/8 over upper bound + Gate 4 cos-sim 1.0000 全 percentile | MLMHead 单独 capacity 充分让 fusion 路径成 redundant，cross-attention 学到 ~0 contribution（uniform attention 弱聚合） |
+| 3 | α' Category 1 | frozen BERT + frozen pretrained-MLMHead pressure isolation + trainable HTGN/CrossModalAttention only | epoch1 0.65 → epoch50 0.12 reduction 81.7% < 90% 阈值 | 即使消除 random-head gradient noise confound，HTGN+CrossModalAttention 在 frozen-head pressure 下仍无法 fully converge MLM loss |
+| 4 | C14.5 Path B' Result B audit-PASS | fully-anonymized 5 TTP anomaly probe + within-TTP 80/20 holdout + 4 seed | HTGN-only F1 0.21 / BERT-only 0.97 / Fusion 0.87 → fusion - BERT-only **-0.0998** | fusion cross-attention 在 fully-anonymized fair conditions 下 actively interfere BERT-only 任务解决能力约 10pp，cross-attention 不只 ~0 contribution 是 active negative |
+
+### Phase 7-8 严格下游 gate 设计（避免决策被解读为放弃 fusion claim）
+
+**Phase 7 fusion engagement small-scale gate（已落 known_issues.md::Phase 7 待办）**：
+
+- 在启动 full pretraining 前先跑 1 epoch on 10% data subset 的 mini pretrain
+- 检查 fusion contribution metrics：cross-attention output norm + attention entropy + fusion vs BERT-only contrast loss delta
+- 如 mini pretrain 显示 fusion 仍未 engage（cross-attention output norm 接近 0 / attention entropy 不健康区间 / fusion 与 BERT-only contrast loss 几乎相等）暂停 full pretrain 触发架构级 RFC
+
+**Phase 8 strict fusion ablation（已落 known_issues.md::Phase 8 待办）**：
+
+- finetune 阶段同时跑 HTGN-only + BERT-only + fusion 三 config 完整异常检测评测
+- fusion 必须显著超 max(HTGN-only, BERT-only) F1 + 0.03 加 4 seed paired t-test p < 0.05
+- 同时满足才算 fusion engagement 在 Phase 8 验证通过
+
+### 诚实性契约（Phase 7-8 也 fail 时的处理路径，已落 Phase 12 论文素材）
+
+如 Phase 7 mini pretrain 或 Phase 8 fusion ablation 触发架构级 RFC 时考虑两个方向：
+
+- **Minor 架构调整路径（4-6 周工时）**：attention mask 放宽 + cross-attention 容量增强 + HTGN end-to-end 训练等干预；如调整后 fusion engage 推进；
+- **Major 论文 pivot 路径**：放弃创新点一的双向跨模态融合 claim 把论文重心彻底转向创新点二即 RAPA-GTCL 攻击模板增强 + 图文对比预训练；论文 title 与 contribution claim 相应调整。
+
+诚实性契约必须在 Phase 12 论文素材子节明确记录避免 Phase 7-8 fail 时被忽略或淡化处理。
+
+### 决策点
+
+- **User 与 controller 推荐相反的决策**：controller 推荐 Option γ 1-2 周修复，user 否决选全 null 闭环。User 的 reasoning 严谨——cross-attention 输出 content-quality 问题非 amplitude 问题，λ 修不了零或错只会放大错。Option γ 即使实施完成大概率 SGD 学到 λ→0 让 fusion 实质 bypass，是 fusion 不工作的另一种证明而不是 fusion 修复成功。
+- **Phase 7-8 严格下游 gate 是诚实性契约的硬性 anchor**：Phase 7 mini pretrain fusion engagement metrics + Phase 8 strict ablation 双门槛让 fusion validation 推到 Phase 7-8 不是无 deadline 推迟，是 deadline 严格的真实考验。
+- **诚实性契约预先约定 Phase 7-8 fail 处理**：避免到 Phase 7-8 fail 才临时讨论是否 pivot 论文，pre-commitment 让决策更 disciplined。
+- **Phase 5 与 Phase 4 fusion 状态独立**：即使 Phase 7-8 fusion 严格 gate fail 触发 pivot，Phase 5 RAPA 实施仍是创新点二的核心 contribution，工时不浪费。
+
+### 论文叙事 reframe（已落 Phase 12 论文素材）
+
+Phase 4 全 null 闭环不是放弃 fusion claim 是把 fusion validation 真实场景从 preliminary tests 推到 Phase 7-8 大规模联合预训练。论文 Methods 章节叙事："我们在 cross-modal fusion 架构落地后做了四轮 preliminary diagnostic 在不同任务结构下测试 fusion 自发 engagement，所有四轮均显示 fusion 在 preliminary tests 不自发 engage，这指向 fusion 设计的目标使用场景是 Phase 7 大规模联合预训练 + InfoNCE 跨模态对比损失而非 preliminary supervised tasks，这种 preliminary diagnostic 透明性本身是工程纪律 contribution"。
+
+### 执行 Phase 4 全 null 闭环完成清单
+
+- [x] 5/5 sub-checkpoints 形式完成（11 / 12 / 13 / 14 / 14.5）
+- [x] 4 个 informational null finding 完整 audit trail 落 Phase 12 论文素材
+- [x] Phase 7 fusion engagement small-scale gate 落 Phase 7 待办（pending 后续 docs commit）
+- [x] Phase 8 strict fusion ablation 落 Phase 8 待办（pending 后续 docs commit）
+- [x] 诚实性契约落 Phase 12 论文素材（pending 后续 docs commit）
+- [x] PROGRESS.md / CHECKPOINT_LOG.md 同步更新
+- [ ] v0.4-fusion tag 含完整 closure message（pending 后续 step）
+- [ ] Phase 5 launch spec 等 user 下达
+
+### 下一步
+
+后续 docs commit 添加 Phase 7-8 严格 gate + 诚实性契约 + 四 null 论文叙事 entries → v0.4-fusion tag 申请 → 等 user 下达 Phase 5 launch spec 进入创新点二实施阶段。
+
+---
+
+*下一条记录：Phase 5 RAPA 攻击模板正式实施（等 user launch spec）。*

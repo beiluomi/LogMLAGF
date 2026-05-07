@@ -6,16 +6,17 @@
 
 ## 1. 项目当前阶段与 Checkpoint
 
-- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **5/5 sub-checkpoints 形式完成 + Path B'/B''  Result B 触发架构级 RFC，等 user 裁定 Option γ 是否实施**
+- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **完成（5/5 sub-checkpoints 形式闭环 + Phase 4 全 null 闭环路径 + v0.4-fusion tag 申请；fusion validation 推到 Phase 7-8 严格 gate 验证）**
 - **最新 Checkpoint**：Checkpoint 14（Phase 4 整体集成 + 七项 gate 验证）— **已通过 Option β 路径（5/7 PASS + 2/7 informational null finding）**：Gates 1/2/5/6/7 PASS（forward+backward batch=8 / 三套参数 grad norm > 1e-6 / 8-sample 50-epoch overfit loss 100% reduction / random text cos-sim p50=0.42 / batch=16 真实 PyG batched VRAM 5.13 GB + 单步 205.2 ms），Gates 3/4 在 Option A trained-state re-measurement 后仍 fail（Gate 3 entropy 6/8 over upper bound、Gate 4 cos-sim 1.0000）记入 Phase 12 论文素材作为 Phase 4 第二个 informational null finding。根因诊断：8-sample MLM overfit 在 frozen BERT + trainable MLMHead 配置下不构成 fusion engagement 的有效 pressure，MLMHead 单独 capacity 充分让 fusion 路径成 redundant。真正 evaluation 推到 Checkpoint 14.5 anomaly probe（loss 结构要求 graph-derived discriminative signal）+ Phase 7-8 联合预训练。
 - **Phase 4 进度**：Checkpoint 11 + Checkpoint 12（含真实数据 smoke test audit anchor）+ Checkpoint 13（CrossModalAttention 之上 + build_field_level_mask + MixedMLMCollator + ModifiedMLMHead + 80/20 perplexity 对比 driver）+ Checkpoint 14（Phase4Model 集成 wrapper + deep injection ViLBERT-style + 七项 gate 验证 5/7 PASS + 2/7 informational null Option β 闭环）已 done。下一个：Option α 补充诊断（frozen BERT + frozen MLMHead，30 分钟单 agent 直跑） → Checkpoint 14.5（异常检测前置 probe）→ tag `v0.4-fusion`。
 - **已完成 Phase**：Phase 0（tag `v0.0-scaffold`）+ Phase 1（tag `v0.1-data`）+ Phase 2（tag `v0.2-bert`）+ Phase 3（tag `v0.3-htgn`，conditional pass 后变更为 informationally complete via Checkpoint 11.2-γ-1）
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：（本 commit Path B' final + audit-PASS Result B verdict + PROGRESS/CHECKPOINT_LOG 同步；前置 commit chain 含 protocol violation lesson `aaad0bb` + α' Category 1 `682f819` + α inconclusive `1b16d25` + Checkpoint 14 closure `8204b4a` + 14.5 first run with protocol violation `7838ee8`）
-- **Message**：`feat(phase4): Checkpoint 14.5 Path B' final with full anonymization (audit-clean Result B - architectural-level RFC trigger for Option γ)`
+- **Hash**：（本 commit Phase 4 全 null 闭环 + 严格 Phase 7-8 fusion engagement gates；前置 commit chain 含 Path B' final `5936107` + protocol violation lesson `aaad0bb` + α' Category 1 `682f819` + Checkpoint 14 Option β closure `8204b4a`）
+- **Message**：`feat(phase4): close Phase 4 with four-null finding chain + strict Phase 7-8 fusion engagement gates`
 - **Date**：2026-05-07
+- **Phase 4 closure decision**：user 否决 Option γ 选 Phase 4 全 null 闭环路径。理由：(1) 四轮 null 共同特征显示 cross-attention 输出 content-quality 问题（零或错），不是 amplitude 不够，λ scaling factor 修不了零或错只会让错变得更错；(2) Option γ 大概率结果 SGD 学到 λ→0 让 fusion 实质 bypass，1-2 周工时换 cleaner 同样 null 信号 ROI 不可接受；(3) 四轮 null 共同特征是任务结构都不是 cross-modal fusion 设计的目标使用场景（structure-determined link prediction / 8-sample MLM overfit / frozen pressure isolation / lexical-rich BERT-saturated anomaly probe），fusion 真实目标是 Phase 7 InfoNCE 跨模态对比损失 + Phase 8 真实异常检测；(4) Phase 4 preliminary tests 全 null 是合理 prior 不是 fusion 不工作最终判定，Phase 7-8 才是 fusion 该 engage 的真实场景。
 - **Option α' result**：**Category 1 — Gate 5 FAIL**——pretrained-frozen MLMHead 配置下 epoch1 0.6532 → epoch50 0.1197 reduction 81.7% < 90% 阈值。Gates 3/4 SKIPPED 早退出。**Confound 真实但不充分**：α 原始 epoch50 loss 3.62 vs α' epoch50 loss 0.12 是 30x 改善证明 random-head gradient-noise confound 真实存在但即使消除 confound，HTGN + CrossModalAttention 在 frozen-head pressure 下仍无法 fully converge MLM loss → **真 fusion incapacity 强信号**。按 user 预设解读框架 Category 1 含义：14.5 fail 时直接进架构级 RFC 评估 Option γ + 其他架构修复路径，**不需要再做 root cause 回合**。
 - **Checkpoint 14.5 三轮诊断完整闭环（commits `7838ee8` 首轮 + Path B 实施 reverted into Path B' refinement + 本 commit Path B' final + audit-PASS Result B verdict）**：
   - **首轮**（commit `7838ee8`，含 implementer 协议违反保留作为 audit anchor）：Gate 3 FAIL（BERT-only F1 0.995 ≈ fusion F1 0.995 lexical leakage TTP-name tokens 让 BERT 单独 saturate）
@@ -80,7 +81,8 @@
 | 47 | `7838ee8` | checkpoint 14.5 first run (含协议违反保留作为 audit anchor) | feat(probe): Phase 4 / Checkpoint 14.5 anomaly detection probe with 5 ATT&CK TTP templates |
 | 48 | `eddb23c` | docs / Phase 5 schema | docs(known_issues): Phase 5 待办 add ALLOWED_EDGE_TRIPLES schema 扩展议程 |
 | 49 | `aaad0bb` | docs / protocol violation lesson | docs(phase4): record Checkpoint 14.5 implementer protocol violation lesson |
-| 50 | `<this commit>` | checkpoint 14.5 path B' final (Result B) | feat(phase4): Checkpoint 14.5 Path B' final with full anonymization (audit-clean Result B - architectural-level RFC trigger for Option γ) |
+| 50 | `5936107` | checkpoint 14.5 path B' final (Result B) | feat(phase4): Checkpoint 14.5 Path B' final with full anonymization (audit-clean Result B - architectural-level RFC trigger for Option γ) |
+| 51 | `<this commit>` | phase 4 closure | feat(phase4): close Phase 4 with four-null finding chain + strict Phase 7-8 fusion engagement gates |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 / Phase 4 设计偏离 + 经验启发式校准）
 
@@ -104,7 +106,16 @@
 
 ## 5. 下一步预期工作
 
-**Phase 4 主体 4 sub-checkpoint 推进（2026-05-06 launch spec 严谨化升级版，预计 13-14 天）**：
+**Phase 4 已闭环（2026-05-07 全 null 闭环路径）**：5/5 sub-checkpoints 形式完成 + 4 个 informational null finding chain（C11.2-γ-1 link prediction + C14 Gates 3/4 MLM-overfit + α' Category 1 frozen pressure + 14.5 Path B' Result B audit-PASS anomaly probe）+ v0.4-fusion tag。Fusion mechanism validation 推到 Phase 7-8 严格 gate 验证（详见 known_issues.md::Phase 7 待办::"fusion engagement small-scale gate" + Phase 8 待办::"strict fusion ablation"）。
+
+**下一阶段 Phase 5 RAPA 攻击模板正式实施（创新点二核心阶段）**：等 user 下达 Phase 5 launch spec。已落 known_issues.md 的 Phase 5 待办 entries 作为 design constraint 输入：
+- 字段级 mask 任务的"添加机制"（Phase 4 / Checkpoint 13 RFC 决议延迟到 Phase 5 与 RAPA 共享注入框架实施）
+- 20 TTP 模板设计必须含 6 类 hard negative benign admin behaviors（GPT 反思议程，避免合成攻击假可分性陷阱）
+- ALLOWED_EDGE_TRIPLES schema 扩展议程（Checkpoint 14.5 RFC-14.5-1 触发，registry + process-handle 边类型工程妥协 Phase 5 统一处理）
+
+Phase 5 与 Phase 4 fusion 状态独立——即使 Phase 7-8 fusion 严格 gate fail 触发 paper pivot，Phase 5 RAPA 实施仍是创新点二的核心 contribution 不浪费工时。
+
+**已 superseded 的 Phase 4 主体 4 sub-checkpoint 推进（2026-05-06 launch spec 严谨化升级版，原计划 13-14 天）保留作为 audit trail**：
 
 **Checkpoint 12（Phase 4.1 双向跨模态注意力实施，预计 3 天）**：实施 `src/loghetero/models/fusion/cross_attention.py`。设计参数预先锁定避免 RFC 触发：
 
@@ -152,7 +163,7 @@
 
 ## 6. 当前 Active 待回答问题
 
-无（Checkpoint 11.1 Option B + Checkpoint 11.2-γ-1 双决议落地完成；Phase 4 待办::Phase 3 sanity AUC re-validation 标 informationally complete；Phase 4 launch spec 严谨化升级版已于 2026-05-06 在本会话窗口下达完成，含 4 sub-checkpoint + 七项 gate + Checkpoint 14.5 异常检测前置 probe + 禁外部 LLM API 五项硬性纪律；本 commit 是 Phase 4 主体启动前的 docs-only 措辞收紧补丁，下一动作为 Checkpoint 12 跨模态注意力模块实施）。
+无（Phase 4 全 null 闭环路径完成 2026-05-07，5/5 sub-checkpoints 形式闭环 + 4 个 informational null finding chain + 严格 Phase 7-8 fusion engagement gates 落档 + 诚实性契约落 Phase 12 论文素材；v0.4-fusion tag 申请 in flight；下一动作为 Phase 5 RAPA 攻击模板正式实施 launch spec 等 user 下达）。
 
 ## 7. 快速复现指令
 
