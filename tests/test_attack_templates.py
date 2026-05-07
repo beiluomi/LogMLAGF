@@ -1,4 +1,4 @@
-"""Unit tests for Phase 4 / Checkpoint 14.5 ATT&CK TTP attack templates.
+"""Unit tests for Phase 4 / Checkpoint 14.5 + Phase 5 / Checkpoint 15 ATT&CK TTP attack templates.
 
 Tests verify:
   - All 5 TTP templates produce correct event types (no external API calls)
@@ -6,6 +6,8 @@ Tests verify:
   - Node IDs follow the shared-seed + atk_-prefix design (RFC-14.5-4)
   - SyntheticInjector produces correct event counts (RFC-14.5-9: 5x100=500 attack)
   - ProbeClassifier has correct architecture per RFC-14.5-8
+  - Phase 5 / Checkpoint 15: dual-node svchost workaround (T1055) + module-level
+    constants pattern + 6-7 tests per new TTP
 
 These tests are pure Python + loghetero imports; no ATLAS data required.
 """
@@ -46,17 +48,17 @@ def _make_template_call(template_cls: type, seed: int = 42, iid: int = 0) -> lis
 
 
 def test_all_templates_import() -> None:
-    """ALL_TEMPLATES must contain exactly 5 templates (one per TTP)."""
+    """ALL_TEMPLATES must contain exactly 6 templates (5 Phase 4 + 1 Phase 5 T1055)."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
 
-    assert len(ALL_TEMPLATES) == 5, f"Expected 5 templates, got {len(ALL_TEMPLATES)}"
+    assert len(ALL_TEMPLATES) == 6, f"Expected 6 templates, got {len(ALL_TEMPLATES)}"
 
 
 def test_all_template_ttp_ids() -> None:
     """Each template must have the correct TTP id."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
 
-    expected_ids = {"T1059.001", "T1003.001", "T1071.001", "T1547.001", "T1041"}
+    expected_ids = {"T1059.001", "T1003.001", "T1071.001", "T1547.001", "T1041", "T1055"}
     actual_ids = {t.ttp_id for t in ALL_TEMPLATES}
     assert actual_ids == expected_ids
 
@@ -309,7 +311,7 @@ def test_different_instance_ids_produce_distinct_node_ids() -> None:
 
 
 def test_injector_total_event_count() -> None:
-    """SyntheticInjector must produce exactly 500 attack + 500 benign = 1000 events."""
+    """SyntheticInjector must produce exactly len(ALL_TEMPLATES)*EVENTS_PER_TTP attack + 500 benign."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
     from loghetero.data.parsers.base import EdgeType, Event, NodeType
     from loghetero.data.synthetic_injector import (
@@ -366,7 +368,7 @@ def test_injector_total_event_count() -> None:
     attack_count = sum(1 for _, lbl in dataset.events_with_labels if lbl == 1)
     benign_count = sum(1 for _, lbl in dataset.events_with_labels if lbl == 0)
 
-    expected_attack = len(ALL_TEMPLATES) * EVENTS_PER_TTP  # 500
+    expected_attack = len(ALL_TEMPLATES) * EVENTS_PER_TTP  # 6 * 100 = 600 (Phase 5 adds T1055)
     assert attack_count == expected_attack, f"Attack count {attack_count} != {expected_attack}"
     assert (
         benign_count == NUM_BENIGN_MATCHED
@@ -374,10 +376,14 @@ def test_injector_total_event_count() -> None:
 
 
 def test_injector_train_test_split_ratio() -> None:
-    """80/20 split: train should be ~800, test ~200 (within rounding tolerance)."""
+    """80/20 split: total events = 6*100 + 500 = 1100; train ~880, test ~220."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
     from loghetero.data.parsers.base import EdgeType, Event, NodeType
-    from loghetero.data.synthetic_injector import SyntheticInjector
+    from loghetero.data.synthetic_injector import (
+        EVENTS_PER_TTP,
+        NUM_BENIGN_MATCHED,
+        SyntheticInjector,
+    )
 
     t_start = int(1.5e18)
     rng = random.Random(7)
@@ -404,15 +410,19 @@ def test_injector_train_test_split_ratio() -> None:
     )
     dataset = injector.build()
 
+    expected_total = len(ALL_TEMPLATES) * EVENTS_PER_TTP + NUM_BENIGN_MATCHED
     total = len(dataset.train_events) + len(dataset.test_events)
-    assert 950 <= total <= 1050, f"Total events {total} out of expected ~1000 range"
+    # Allow small rounding tolerance around the expected total.
+    assert (
+        abs(total - expected_total) <= 50
+    ), f"Total events {total} out of expected ~{expected_total} range"
     # Train should be ~80%.
     train_ratio = len(dataset.train_events) / total
     assert 0.70 <= train_ratio <= 0.90, f"Train ratio {train_ratio:.2f} outside [0.70, 0.90]"
 
 
 def test_injector_per_ttp_entries() -> None:
-    """SyntheticInjector must produce entries for all 5 TTP ids."""
+    """SyntheticInjector must produce entries for all 6 TTP ids (Phase 4 x5 + Phase 5 T1055)."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
     from loghetero.data.parsers.base import EdgeType, Event, NodeType
     from loghetero.data.synthetic_injector import SyntheticInjector
@@ -438,7 +448,7 @@ def test_injector_per_ttp_entries() -> None:
     injector = SyntheticInjector(benign_events=benign_events, templates=ALL_TEMPLATES, seed=42)
     dataset = injector.build()
 
-    expected_ids = {"T1059.001", "T1003.001", "T1071.001", "T1547.001", "T1041"}
+    expected_ids = {"T1059.001", "T1003.001", "T1071.001", "T1547.001", "T1041", "T1055"}
     assert set(dataset.per_ttp_events.keys()) == expected_ids
 
 
@@ -554,7 +564,7 @@ def test_attack_templates_no_network_fetch(monkeypatch: pytest.MonkeyPatch) -> N
     t_end = t_start + int(3.6e12)
     rng = _make_rng()
 
-    # All 5 templates must work without network access.
+    # All 6 templates must work without network access.
     for template in ALL_TEMPLATES:
         events = template.generate(
             seed_subject="victim_user",
@@ -565,3 +575,151 @@ def test_attack_templates_no_network_fetch(monkeypatch: pytest.MonkeyPatch) -> N
             instance_id=0,
         )
         assert len(events) > 0, f"{template.ttp_id} produced no events"
+
+
+# ---------------------------------------------------------------------------
+# T1055 Process Injection (Phase 5 / Checkpoint 15 Cycle A)
+# ---------------------------------------------------------------------------
+
+
+def test_t1055_generates_8_events() -> None:
+    """T1055 must generate exactly 8 events."""
+    from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
+
+    events = _make_template_call(T1055ProcessInjection)
+    assert len(events) == 8, f"Expected 8 events, got {len(events)}"
+
+
+def test_t1055_event_types() -> None:
+    """T1055 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES)."""
+    from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType
+
+    events = _make_template_call(T1055ProcessInjection)
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1055"
+
+
+def test_t1055_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1055ProcessInjection)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1055_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
+
+    events = _make_template_call(T1055ProcessInjection)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1055_timestamps_in_window() -> None:
+    """All T1055 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1055ProcessInjection()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1055_dual_node_svchost_schema_workaround() -> None:
+    """Validate the dual-node svchost workaround (inventory entry #1).
+
+    svchost_handle (events 3 and 6) must be NodeType.file.
+    svchost_injected (events 7 and 8) must be NodeType.process.
+    The two IDs must be distinct (not aliased to the same node).
+    Both IDs must share the atk_<iid>_ prefix.
+    """
+    from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
+    from loghetero.data.parsers.base import EdgeType, NodeType
+
+    iid = 7
+    template = T1055ProcessInjection()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    # Event 3 (index 2): HANDLE_REQUEST -> svchost_handle (file node)
+    ev_handle_req = events[2]
+    assert ev_handle_req.operation == EdgeType.HANDLE_REQUEST.value
+    assert (
+        ev_handle_req.obj_type == NodeType.file
+    ), f"svchost_handle must be file node, got {ev_handle_req.obj_type}"
+    assert "svchost_handle" in ev_handle_req.obj
+
+    # Event 6 (index 5): HANDLE_DUPLICATE -> svchost_handle (file node)
+    ev_handle_dup = events[5]
+    assert ev_handle_dup.operation == EdgeType.HANDLE_DUPLICATE.value
+    assert (
+        ev_handle_dup.obj_type == NodeType.file
+    ), f"svchost_handle must be file node in HANDLE_DUPLICATE, got {ev_handle_dup.obj_type}"
+    assert (
+        ev_handle_dup.obj == ev_handle_req.obj
+    ), "svchost_handle ID inconsistent across events 3 and 6"
+
+    # Event 7 (index 6): svchost_injected (process node) -> NET_CONNECT
+    ev_net_connect = events[6]
+    assert ev_net_connect.operation == EdgeType.NET_CONNECT.value
+    assert (
+        ev_net_connect.subject_type == NodeType.process
+    ), f"svchost_injected must be process node, got {ev_net_connect.subject_type}"
+    assert "svchost_injected" in ev_net_connect.subject
+
+    # Event 8 (index 7): svchost_injected (process node) -> NET_SEND_NETWORK
+    ev_net_send = events[7]
+    assert ev_net_send.operation == EdgeType.NET_SEND_NETWORK.value
+    assert (
+        ev_net_send.subject_type == NodeType.process
+    ), f"svchost_injected must be process node in NET_SEND_NETWORK, got {ev_net_send.subject_type}"
+    assert (
+        ev_net_send.subject == ev_net_connect.subject
+    ), "svchost_injected ID inconsistent across events 7 and 8"
+
+    # The two virtual svchost node IDs must be DISTINCT (not aliased).
+    svchost_handle_id = ev_handle_req.obj
+    svchost_injected_id = ev_net_connect.subject
+    assert (
+        svchost_handle_id != svchost_injected_id
+    ), "svchost_handle and svchost_injected must be distinct node IDs"
+
+    # Both must carry the atk_<iid>_ prefix.
+    prefix = f"atk_{iid}_"
+    assert svchost_handle_id.startswith(prefix), f"{svchost_handle_id!r} lacks prefix {prefix!r}"
+    assert svchost_injected_id.startswith(
+        prefix
+    ), f"{svchost_injected_id!r} lacks prefix {prefix!r}"
+
+
+def test_t1055_labels_are_1() -> None:
+    """All T1055 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
+
+    events = _make_template_call(T1055ProcessInjection)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
