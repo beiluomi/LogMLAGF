@@ -6,16 +6,16 @@
 
 ## 1. 项目当前阶段与 Checkpoint
 
-- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **进行中（3/5 sub-checkpoints 已完成；Phase 4 launch spec 严谨化升级版后总数为 5：11 / 12 / 13 / 14 / 14.5）**
-- **最新 Checkpoint**：Checkpoint 13（改造 MLM 任务集成）— 已通过（48/48 单元测试 + ruff + mypy + 全 suite 252 passed；spec review ✅ compliant with one minor caveat；code quality review approved with minor fixes 已应用；perplexity 对比 modified MLM 1.28 ± 0.04 vs traditional MLM 1.31 ± 0.05 在 4 seed direction-consistent +2.9% lift hypothesis-direction-positive；user 三处 sanity check 全部 CONFIRMED HELD：单 prediction head 共享、mask_type_per_sample debug 可见、添加=C deferral docstring + commit message 落档）
-- **Phase 4 进度**：Checkpoint 11 + Checkpoint 12（含真实数据 smoke test audit anchor）+ Checkpoint 13（CrossModalAttention 之上 + build_field_level_mask + MixedMLMCollator + ModifiedMLMHead + 80/20 perplexity 对比 driver）已 done。下一个：Checkpoint 14（七项 gate 验证）→ Checkpoint 14.5（异常检测前置 probe）→ tag `v0.4-fusion`。
+- **当前 Phase**：Phase 4（双向跨模态融合，**创新点 1 第二部分**）— **进行中（4/5 sub-checkpoints 已完成；Phase 4 launch spec 严谨化升级版后总数为 5：11 / 12 / 13 / 14 / 14.5）**
+- **最新 Checkpoint**：Checkpoint 14（Phase 4 整体集成 + 七项 gate 验证）— **已通过 Option β 路径（5/7 PASS + 2/7 informational null finding）**：Gates 1/2/5/6/7 PASS（forward+backward batch=8 / 三套参数 grad norm > 1e-6 / 8-sample 50-epoch overfit loss 100% reduction / random text cos-sim p50=0.42 / batch=16 真实 PyG batched VRAM 5.13 GB + 单步 205.2 ms），Gates 3/4 在 Option A trained-state re-measurement 后仍 fail（Gate 3 entropy 6/8 over upper bound、Gate 4 cos-sim 1.0000）记入 Phase 12 论文素材作为 Phase 4 第二个 informational null finding。根因诊断：8-sample MLM overfit 在 frozen BERT + trainable MLMHead 配置下不构成 fusion engagement 的有效 pressure，MLMHead 单独 capacity 充分让 fusion 路径成 redundant。真正 evaluation 推到 Checkpoint 14.5 anomaly probe（loss 结构要求 graph-derived discriminative signal）+ Phase 7-8 联合预训练。
+- **Phase 4 进度**：Checkpoint 11 + Checkpoint 12（含真实数据 smoke test audit anchor）+ Checkpoint 13（CrossModalAttention 之上 + build_field_level_mask + MixedMLMCollator + ModifiedMLMHead + 80/20 perplexity 对比 driver）+ Checkpoint 14（Phase4Model 集成 wrapper + deep injection ViLBERT-style + 七项 gate 验证 5/7 PASS + 2/7 informational null Option β 闭环）已 done。下一个：Option α 补充诊断（frozen BERT + frozen MLMHead，30 分钟单 agent 直跑） → Checkpoint 14.5（异常检测前置 probe）→ tag `v0.4-fusion`。
 - **已完成 Phase**：Phase 0（tag `v0.0-scaffold`）+ Phase 1（tag `v0.1-data`）+ Phase 2（tag `v0.2-bert`）+ Phase 3（tag `v0.3-htgn`，conditional pass 后变更为 informationally complete via Checkpoint 11.2-γ-1）
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：`5cba533`（Checkpoint 13 review fixes commit；前置 Checkpoint 13 主 commit `a3eb147` ModifiedMLMHead + build_field_level_mask + MixedMLMCollator + perplexity 对比 driver；前置 RFC 决议 docs `1e62fab` Phase 5 待办 添加=C deferral entry；前置 Checkpoint 12 commits 为 `cfa4ec6` 主体 + `78c76ee` review fixes + `8222e50` smoke test）
-- **Message**：`fix(objectives): Phase 4 / Checkpoint 13 review fixes (GELU + driver dedup + misc polish)`
-- **Date**：2026-05-06
+- **Hash**：（本 commit Checkpoint 14 Option β 形式闭环；前置 Checkpoint 14 RFC 决议 docs commits 含 `2eb712e` Phase 7 deep injection 训练成本预算提醒 + `241f30f` Checkpoint 13 Option C 三条件落档 + `2c89cb5` Phase 5 hard negative benign admin behaviors 议程；前置 Checkpoint 13 commits 为 `a3eb147` 主体 + `5cba533` review fixes + `71363e9` 收尾；前置 Checkpoint 12 commits 为 `cfa4ec6` 主体 + `78c76ee` review fixes + `8222e50` smoke test + `6f2410f` 收尾）
+- **Message**：`feat(phase4): Checkpoint 14 closure with 5/7 PASS + 2/7 informational null finding (β)`
+- **Date**：2026-05-07
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
 
@@ -58,7 +58,11 @@
 | 35 | `1e62fab` | docs / Phase 5 待办 | docs(known_issues): add Phase 5 待办 entry for 字段级 mask 添加机制延迟决议 |
 | 36 | `a3eb147` | checkpoint 13 | feat(objectives): Phase 4 / Checkpoint 13 modified MLM task on fused hidden states |
 | 37 | `5cba533` | checkpoint 13 fix | fix(objectives): Phase 4 / Checkpoint 13 review fixes (GELU + driver dedup + misc polish) |
-| 38 | `<this commit>` | docs / checkpoint 13 close | docs(progress): close Checkpoint 13 — modified MLM on fused hidden states |
+| 38 | `71363e9` | docs / checkpoint 13 close | docs(progress): close Checkpoint 13 — modified MLM on fused hidden states |
+| 39 | `2c89cb5` | docs / Phase 5 待办 | docs(known_issues): add Phase 5 待办 hard negative benign admin behaviors agenda |
+| 40 | `241f30f` | docs / checkpoint 13 Option C | docs(known_issues): Checkpoint 13 Option C 三条件落档（perplexity fast-iter 接受 + Phase 7 proper-scale 复验占位 + 14.5 临界测试 caveat）|
+| 41 | `2eb712e` | docs / Phase 7 deep injection | docs(known_issues): Phase 7 待办 add deep injection 训练成本预算提醒（Checkpoint 14 RFC-1 Option A 触发）|
+| 42 | `<this commit>` | checkpoint 14 closure | feat(phase4): Checkpoint 14 closure with 5/7 PASS + 2/7 informational null finding (β) |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 / Phase 4 设计偏离 + 经验启发式校准）
 
@@ -96,15 +100,21 @@
 
 **Checkpoint 13（Phase 4.2 改造 MLM 任务集成，预计 2 天）**：v3 prompt §6 Phase 4.3 字段级 mask 任务（目标字段替换 / 删除 / 添加机制）；融合后隐藏状态预测 mask token 而非原始 BERT 输出；混合训练比初值 50/50；与传统 MLM perplexity 对比验证融合后预测确实利用图信息。
 
-**Checkpoint 14（Phase 4 整体集成 + 七项 gate 验证，预计 2.5 天）**：原 forward 不报错 + 梯度正常两项 gate 升级为以下七项硬性 checklist 全部 pass：
+**Checkpoint 14（Phase 4 整体集成 + 七项 gate 验证，已通过 Option β 路径 5/7 PASS + 2/7 informational null finding 2026-05-07）**：原 forward 不报错 + 梯度正常两项 gate 升级为七项硬性 checklist：
 
-1. **forward / backward 不抛**——batch=8 ATLAS 真实数据
-2. **梯度三套全非零**——BERT 投影 / HTGN / cross-attention 任一 `.grad` 全零触发 RFC
-3. **fusion 参数非退化**——cross-attention normalized entropy = H(attention) / log(n_keys) ∈ [0.3, 0.95]，下界防 single-token hard mask 退化，上界防均匀分布退化，两端越界触发 RFC
-4. **modality dropout 显著影响**——BERT 输出置零后 forward 输出与正常 forward cos-sim < 0.95
-5. **小 batch overfit sanity**——8 固定样本训 50 epoch，loss 收敛接近零
-6. **random text ablation**——random token 替换真实日志文本输入，hidden states 与真实输入 hidden states 在 cosine 距离上显著差异（排除 cross-attention 学成对任意 text 给固定 summary 的 subtle failure）
-7. **memory & time profile**——batch=16 真实 PyG batched HeteroData 实测 VRAM < 16 GB on RTX 4090，单步 forward+backward < 500 ms
+1. ✅ **forward / backward 不抛**——batch=8 ATLAS 真实数据，loss 9.72，无 NaN/Inf
+2. ✅ **梯度三套全非零 grad norm > 1e-6**——bert_proj 4.5e-1 / htgn 2.0e+14（注：Phase 7 必须启用 gradient clipping max_norm=5.0，详见 known_issues.md::Phase 7 待办）/ cross_attention 3.6e+0
+3. ⚠️ **fusion 参数非退化** entropy ∈ [0.3, 0.95]——**informational null finding**：8 个标量 6/8 over upper bound（trained-state 与 init-state 一致），根因 8-sample MLM overfit 不构成 fusion engagement pressure，详见 known_issues.md::Phase 12 论文素材::"MLM-overfit informational null finding"
+4. ⚠️ **modality dropout 显著影响**——**informational null finding**：cos-sim mean = p10 = p50 = p90 = 1.0000 trained-state 与 init-state 一致，同根因（fusion 路径在 frozen BERT + trainable MLMHead 配置下 redundant）
+5. ✅ **小 batch overfit sanity**——8 固定样本训 50 epoch，loss 10.52 → 0.000224 reduction 100%
+6. ✅ **random text ablation**——cos-sim mean 0.43，p10/50/90 = 0.33/0.42/0.53 全部 < 0.9
+7. ✅ **memory & time profile**——batch=16 真实 PyG batched HeteroData VRAM **5.126 GB** < 16 GB，单步 **205.2 ms** < 500 ms（数字作为 Phase 7 batch size 设计 single source of truth）
+
+**Phase 4 收尾路径 Option β**：5/7 PASS + 2/7 informational null finding 状态闭环。Gates 3/4 informational null 与 Checkpoint 11.2-γ-1（Phase 4 入口 BERT input-feature injection on link prediction）形成 Phase 4 双 informational null pattern，论文 Methods 章节作为 negative-result-as-positive-contribution 工程方法论 contribution evidence。真正 fusion 效用判定推到 Checkpoint 14.5 anomaly detection 前置 probe（loss 结构要求 graph-derived discriminative signal）+ Phase 7-8 大规模联合预训练。
+
+**Option α 补充诊断**（30 分钟级，单 agent 直跑非 4 步 pattern）：在进入 14.5 之前跑一次 frozen BERT + frozen MLMHead 配置的 Gate 5 + Gate 3/4 重测。仅 HTGN + CrossModalAttention 可训练，强迫 fusion 路径承担 MLM overfit 学习责任。两种结果都不影响 Phase 4 形式闭环也不影响 14.5 启动，仅影响 14.5 fail 时的回退路径决策速度（α PASS → 进 14.5 时融合机制健康度信心增强；α FAIL → 14.5 fail 时直接进架构级 RFC 评估 Option γ 不需要额外诊断回合）。
+
+**Option γ（推迟到 14.5 之后视情况启用）**：在 CrossModalAttention 加可学习 scaling factor `λ` 让 `fused_text = BERT_residual + λ · tg_out_proj(tg_ctx)`。如 14.5 通过双条件门槛 γ 永久不需要实施；如 14.5 fail 结合 α 结果启动架构级 RFC 评估 γ 与其他路径例如 BERT 解冻或 cross-attention 容量增强。
 
 **Checkpoint 14.5（异常检测前置 probe，Phase 4 真正最后一关，预计 4-5 天）**：
 

@@ -515,7 +515,161 @@ Checkpoint 14.5 异常检测前置 probe 是创新点一融合机制效用的真
 - [ ] 14.5 anomaly probe 与 perplexity 对比的关系（独立诊断信号互不否定）已写入 Methods 段落 + Discussion / Limitation 子节
 - [ ] Phase 7 大规模复验完成日期 + commit hash + 数字闭环标注已追加在本 Phase 12 论文素材子节末尾
 
+### Cross-modal fusion init-state asymmetry between text and graph pathways（2026-05-06，Checkpoint 14 RFC-G3/G4 Option A 决议触发）
+
+**现象**：Phase 4 / Checkpoint 14 七项 gate 验证首轮发现 init 状态下 Gate 6（random text ablation）轻松 PASS（cos-sim mean 0.43，p10/50/90 = 0.33/0.42/0.53）但 Gate 4（modality dropout）full FAIL（cos-sim mean 与所有 percentile 全部 1.0000）。两 gate 测试同一 fusion 机制的 modality utilization 但呈现完全相反结果，初看像架构 bug 实际是 **architectural-expected asymmetry**。
+
+**根因分析**：
+
+1. **Text 通路在 init 时 dominate**：BERT 自身的 12 层 transformer + residual 连接对 input token 的语义表达自然 strong；real text vs random text 让 BERT 输出本质不同（token embedding 完全不同 + attention 模式完全不同），real text 与 random text 的 fused_text 之间 cos-sim 远 < 1。
+2. **Graph 通路在 init 时 weak**：CrossModalAttention 的 graph→text contribution `tg_out_proj(tg_ctx)` 量级仅 **0.12% of text hidden state norm**（实测 L2 diff ≈ 0.36 vs fused_text norm ≈ 299）。BERT residual 占 99.88%，置零 graph 输入对 fused_text 几乎无影响 → cos-sim ≈ 1。
+3. **数学必然性**：任何 deep cross-modal injection 架构如果 BERT 与 graph 通路在 init 时贡献量级不对称（无论哪一侧主导），dropout 该侧的 sanity 检测在 init 状态都会出现 false negative。这不是 LogHetero 特有缺陷，是 ViLBERT / GreaseLM / Patton 系 deep injection 架构的共性现象——所有 prior work 都是 trained-state 报告 attention，没有 init-state baseline。
+
+**论文 Methods 章节使用方式**：
+
+本观察作为 "我们如何在工程层面处理 fusion 机制 init-state 与 trained-state 的诊断信号差异" 工程方法论支撑写入 Methods 章节相关段落（建议放在 "4.x Cross-modal fusion verification protocol" 子节）。可对照写作 hook：cf. ViLBERT / GreaseLM / Patton 等 prior work 通常只报告训练后 attention 可视化，没有显式区分 init vs trained 状态的诊断信号；我们额外报告 init-state asymmetry + trained-state convergence 对比，可作为 Methods 章节 contribution evidence——审稿人可以看到具体诊断协议的设计而非"我们做了 sanity check"的黑盒陈述。
+
+**Phase 12 写作要点**：
+
+- 如果 trained-state（Gate 5 overfit 后）测得 Gate 4 cos-sim 显著 < 0.95，论文 Methods 段写"我们的 fusion 机制在训练后让 graph 通路对 text representation 产生 measurable 影响 X% (cos-sim mean = Y)，从 init-state asymmetry (cos-sim ≈ 1 graph 通路 weak) 演变到 trained-state symmetry (cos-sim ≈ Y graph 通路 active)"。这种 init→trained 演化叙事比纯 trained 数字更说明 fusion 机制是真实学到的而非偶然 init 配置。
+- 如果 trained-state 测得 Gate 4 cos-sim 仍接近 1，触发架构级 RFC（详见 Phase 12 论文素材::"14.5 异常检测前置 probe 临界测试 caveat"），叙事必须诚实报告"我们发现 cross-modal fusion 在 8-sample overfit 训练后仍未让 graph 通路对 text representation 产生显著影响" + 把判断推到 Phase 7 大规模联合预训练后复测。
+
+**审计 anchor**：本条目是 Checkpoint 14 RFC-G3/G4 决议（2026-05-06，user 拍板 Option A trained-state measurement）的 audit trail 之一，与 Checkpoint 14 commit message + driver script docstring 中的"Gates 3/4 测量时序 rationale"段落一同构成完整决议链。
+
+### Cross-modal fusion engagement requires task-specific pressure structure: MLM-overfit informational null finding（2026-05-07，Checkpoint 14 Option β 决议触发，Phase 4 第二个 informational null finding）
+
+**现象**：Phase 4 / Checkpoint 14 七项 gate 验证按 Option A re-measurement 协议（Gate 5 8-sample × 50-epoch overfit 完成后立即用 trained model state 测 Gates 3 与 4）落地后实测 5/7 PASS + 2/7 informational null finding：
+
+- Gate 3 trained-state 8 个 entropy 标量：6/8 over upper bound (>0.95，过度均匀分散)，0/8 under lower bound (<0.3，无 sharp 退化)。Text→graph 方向 4/4 fusion point 全部 ≈ 1.0，graph→text 方向 2/4 也越界。
+- Gate 4 trained-state cos-sim：mean = p10 = p50 = p90 = 1.0000，与 init-state 完全相同。50 epoch overfit 训练后置零 graph 输入对 fused_text 完全无影响。
+- Gate 5 PASS：epoch1 loss 10.52 → epoch50 0.000224，reduction 100%，model 确实在学但显然不是通过 fusion 机制。
+
+**根因（SGD 路径分析 + cross-attention 残差量级 + MLMHead 容量充分性，三条因果链汇合）**：
+
+1. **SGD 取最低阻力路径**：Gate 5 配置下 BERT 冻结、HTGN 可训练、CrossModalAttention 全部可训练、MLMHead 可训练。8 fixed samples × 50 epoch 让 model 完美 memorize，但模型选择的捷径是 **MLMHead 单独学映射 frozen_BERT_output → token_id**——不需要 fusion engagement。
+2. **Cross-attention 残差量级 init 太小**：`fused_text = BERT_residual + tg_out_proj(tg_ctx)`，init 时 `tg_out_proj(tg_ctx)` 量级仅 ~0.12% of BERT_residual norm（实测 L2 diff ≈ 0.36 vs fused_text norm ≈ 299）。BERT residual 占 99.88%。SGD 从这个低能盆地出发难以 break out 让 cross-attention 学到 graph 路径有用——training signal 会优先让 MLMHead 适配 frozen BERT 输出而非投资 fusion 路径。
+3. **MLMHead 容量对 8-sample memorize 充分**：MLMHead 是 trainable Linear(768→30,678)，capacity 远超 8 个 fixed sample 的 token-level mapping 需要量。BERT 冻结让 BERT 输出在 fixed inputs 上是常量 across epochs，MLMHead 单独学 lookup table 即可；fusion 路径成 redundant。
+
+**结论：8-sample MLM overfit 在 frozen BERT + trainable MLMHead 配置下不构成 fusion engagement 的有效 pressure**。Gate 3 text→graph entropy ≈1 与 Gate 4 cos-sim ≈1 是同一根因的两面——cross-attention 学到的策略是"产生几乎为 0 的 contribution（uniform attention 导致弱聚合）"。
+
+**论文 Methods 章节段落措辞模板**（"4.x Cross-modal fusion verification protocol design lessons" 子节适配）：
+
+> Phase 4 / Checkpoint 14 cross-modal fusion verification with the seven-gate
+> protocol revealed an architecturally instructive null finding. Of the seven
+> hard checks defined in the launch spec, five passed cleanly on real ATLAS
+> M3_h2 first-window data (forward+backward stability, gradient flow into all
+> three trainable parameter categories at norms > 1e-6, 8-sample-50-epoch
+> overfit convergence to near-zero loss, random text ablation cosine
+> similarity at p50=0.42 (well below the 0.9 threshold), and batch-16
+> proper-PyG-batched memory/timing budget at 5.13 GB / 205.2 ms median).
+>
+> Two checks (Gate 3 cross-attention entropy bound and Gate 4 modality
+> dropout cosine similarity) failed under both init-state and trained-state
+> measurement (Option A re-measurement on the post-Gate-5 8-sample-50-epoch
+> trained model). Diagnostic analysis traced the failure to a task-pressure
+> mismatch rather than an architectural defect: small-batch MLM overfit
+> with frozen BERT and trainable MLM head allows the prediction head alone
+> to memorize the fixed input-output mapping, leaving the cross-modal
+> attention pathway with no gradient pressure to engage the graph signal.
+> The cross-attention's graph-to-text residual contribution remained at
+> ~0.12% of the BERT residual magnitude even after 50 epochs of MLM
+> training, consistent with attention weights that learned to produce
+> near-zero aggregated contribution (uniform-distribution entropy ≈ 1.0).
+>
+> The proper test of cross-modal fusion engagement is therefore not
+> small-batch MLM but **task-loss structures that reward graph-derived
+> discriminative signal**. Phase 4 / Checkpoint 14.5 anomaly detection probe
+> (5 ATT&CK TTP templates with within-TTP 80/20 holdout, three input
+> embedding configurations HTGN-only / BERT-only / fusion, fusion lift ≥
+> 0.03 plus paired t-test p < 0.1 plus BERT-only ≠ fusion double-condition
+> gate) provides the proper-pressure test. Phase 7-8 full-scale joint
+> pretraining with the LogHetero objective (HTGN + BERT + cross-modal
+> fusion + RAPA-GTCL contrastive loss) provides the proper-scale validation.
+>
+> This null finding sits alongside the Phase 4 entry-point Checkpoint
+> 11.2-γ-1 informational null finding (BERT input-feature injection on
+> structure-dominated link prediction) as evidence that **cross-modal
+> innovation claims must be validated under task-loss structures appropriate
+> to the modality being added, not under arbitrary auxiliary objectives**.
+> Both nulls are reported transparently in the Methods chapter as
+> contribution evidence — the empirical map of what cross-modal pressure
+> structures do and do not engage fusion is itself a methodological
+> contribution.
+
+**与 Checkpoint 11.2-γ-1 形成完整 Phase 4 双 informational null pattern**：
+
+| 维度 | C11.2-γ-1（Phase 4 入口）| C14 Gates 3/4（Phase 4 收尾） |
+|---|---|---|
+| 触发任务 | structure-determined link prediction with random edge masking | 8-sample MLM overfit with frozen BERT + trainable MLMHead |
+| Null 现象 | 4 档 BERT 集成 AUC 全聚集 0.811-0.815，无 statistical 差异 | Gates 3 entropy 6/8 越上界 + Gate 4 cos-sim 1.0000 |
+| 根因 | 任务结构（随机边 mask + structural 负采样）让图拓扑信号完全决定，BERT semantic features 通过 input-feature 通道无 lift | 任务结构（小 batch memorize + frozen BERT + trainable head）让 MLMHead 单独 capacity 充分，cross-attention 路径成 redundant |
+| 实证否定 | "BERT 简单 input-feature injection 能提升 structure-dominated link prediction" | "small-batch MLM overfit 能让 cross-modal fusion 自发 engage 图路径" |
+| 不外推 | 不外推到 BERT 在 anomaly detection 无效 | 不外推到 cross-modal fusion 在 anomaly task 无效 |
+| 真正 evaluation | Phase 7-8 anomaly detection 联合预训练 | Checkpoint 14.5 anomaly probe + Phase 7-8 联合预训练 |
+| Paper 叙事 | negative-result-as-positive-contribution | negative-result-as-positive-contribution |
+
+**Phase 12 写作要点**：
+
+- 双 null finding 在 Methods 章节"4.x Cross-modal fusion verification protocol"子节并列报告，作为论文 reproducibility & methodology 子节的工程纪律 evidence
+- 14.5 anomaly probe 结果回填后在本条目末尾追加"14.5 完成日期 + commit hash + fusion / HTGN-only / BERT-only F1 数字 + 双条件门槛是否通过 + 是否 BERT-only ≈ fusion + 总结对 Phase 4 双 informational null 的 implication"
+- 如 14.5 通过双条件门槛即 fusion lift ≥ 0.03 + paired t-test p < 0.1 + BERT-only ≠ fusion，论文叙事强化为"我们诚实报告 Phase 4 两个 informational null finding 但 Checkpoint 14.5 anomaly probe 给出 fusion engagement 的方向性证据，Phase 7-8 大规模训练 confirm 整体融合机制有效"
+- 如 14.5 fail 双条件，论文叙事调整为"我们发现 cross-modal fusion 在多个 task pressure 下都未自发 engage 图路径，触发架构级 RFC 评估 Option γ（可学习 scaling factor）或其他架构修复路径"
+
+**审计 anchor**：本条目是 Checkpoint 14 Option β 决议（2026-05-07，user 拍板"5/7 PASS + 2/7 informational null finding 闭环路径 + Option α 30 分钟补充诊断 + Option γ 推迟到 14.5 之后视情况启用"）的 paper-grade audit trail，与 Checkpoint 14 commit message body + Cross-modal fusion init-state asymmetry 条目一同构成完整 Phase 4 收尾决议链。
+
 ## Phase 7 待办
+
+### Gradient clipping 在 Phase 7 联合预训练 launch spec 必须显式启用（2026-05-06，Checkpoint 14 Gate 2 实测 grad_norm 2e14 触发）
+
+**触发原因**：Phase 4 / Checkpoint 14 Gate 2 实测 HTGN 参数 `htgn.tgn_memory._mem.process.time_enc.lin.weight` grad_norm = **2.016e+14**（其他参数量级正常：bert_proj 4.5e-1 / cross_attn 3.6e+0）。Gate 2 阈值 grad_norm > 1e-6 已通过（2e14 远大于 1e-6），但 2e14 工程上是异常梯度爆炸量级，**Phase 7 联合预训练时不加 gradient clipping 必崩**。
+
+**根因（与已知文档 entries 形成完整 root cause picture）**：
+
+PyG TGN memory 的 ns-scale timestamp 通过 `time_enc` (Time2Vec linear projection) 时产生 O(1e18) 激活 → O(1e14) 梯度的已知 numerical issue：
+
+- `htgn.tgn_memory._mem.process.time_enc.lin.weight` 输入是 ns-scale int64 timestamp（~1.54e18 ns），cast to float32 后通过 Linear 产生 O(1e18) 量级激活，反向传播 chain rule 后梯度量级 O(1e14)。
+- 该 issue 与已知的 `Phase 7 待办::TGN msg_store 跨 batch 清理` + `Phase 7 待办::HeteroTGNMemory 跨类型 src 索引语义 proper fix` 两条 entry 形成完整 TGN-related Phase 7 fix root cause picture——三条 entry 都根源于 PyG TGNMemory 的 ns-scale timestamp + msg_store + cross-type 路由设计在 LogHetero use case 下的累积副作用。
+
+**Phase 7 联合预训练 launch spec 启动时必须显式实施（双保险设计）**：
+
+```python
+# 1. 训练循环里手动调用 torch native（max_norm=5.0 给 cross-attention 留训练空间）
+torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+
+# 2. PyTorch Lightning Trainer 配置（防训练循环代码漏调 clip_grad_norm_）
+trainer = pl.Trainer(..., gradient_clip_val=5.0, gradient_clip_algorithm="norm")
+```
+
+**为何 max_norm=5.0 而非 1.0**：cross-attention（graph_proj / tg_attn / gt_attn / output projections / LayerNorms）共数百万参数，1.0 总 norm 上限可能限制其训练动态；5.0 给参数量大但梯度量级合理的模块留训练空间，同时仍能 catch 2e14 量级的 TGN time_enc 爆炸（5e0 vs 2e14 差 14 个数量级，5.0 上限会触发严格 clipping 但允许其他参数自由训练）。Phase 7 实测 first-100-step 的 grad_norm 分布后可校准 max_norm，但 launch 时 5.0 是合理初值。
+
+**实施完成后回头闭环标注**：本待办条目末尾追加 "Phase 7 launch 完成日期 + commit hash + 实测 first-100-step grad_norm 分布 + max_norm 是否调整"。
+
+**审计 anchor**：本条目是 Checkpoint 14 RFC-G3/G4-B（2026-05-06 user 拍板"加 entry"）的 audit trail，**Checkpoint 14 Gate 2 实测 grad_norm 2.016e+14 数字是 Phase 7 launch 时的 single source of truth，不需要重新分析**。
+
+### Time2Vec ns-scale timestamp 数值健康度从 Phase 7 launch 开始持续监控（2026-05-06，Phase 7 gradient clipping 子议程）
+
+**触发原因**：Phase 4 / Checkpoint 14 Gate 2 实测 grad_norm 2e14 通过 gradient clipping 可工程缓解（见上方 entry "Gradient clipping 在 Phase 7 联合预训练 launch spec 必须显式启用"），但本质是 `time_enc` 设计的 numerical instability 在 ns-scale 输入下的累积，**gradient clipping 是 symptom mitigation 不是 root cause fix**。Phase 7 大规模训练如果观察到 loss 频繁出现 NaN 或训练 instability 即使有 gradient clipping 仍需回到 root cause 重评估。
+
+**Phase 7 launch 时设置的监控议程**：
+
+1. **训练 loss NaN 监控**：Phase 7 训练循环必须显式 `loss.isnan()` detect 并 abort，不允许 silent NaN propagation。Lightning `pl.callbacks.EarlyStopping(monitor="train_loss")` 配合短 `val_check_interval` 可捕获 instability。
+2. **grad_norm 分布持续记录**：Phase 7 训练循环每 100 step 记录 `clip_grad_norm_` 返回的 raw grad norm（before clipping），写入 wandb 或 TensorBoard。如果 raw norm distribution 长期稳定在 5.0 上限说明 clipping 频繁触发即 numerical instability 在持续，需要回到 root cause。
+
+**触发回到 Phase 3 Checkpoint 7 RFC 的判定条件**：Phase 7 训练 first-1000-step 出现以下任一现象触发 RFC 重评估：
+
+- loss NaN 频次 > 1% step
+- raw grad norm distribution 中位数持续 > 100（说明 clipping 在 hide instability 而非偶发 spike）
+- 训练 loss 不收敛或剧烈震荡
+
+**回到 Phase 3 Checkpoint 7 RFC 的备选方案**（Phase 7 触发时再 RFC 拍板，本条目仅预读议程不预先决定）：
+
+- **方案 A**：保持 ns-direct + 在 time_enc 输入处先做 log scaling 即 `log(t_ns / 1e9)` 把 ns-scale 压到 hour-scale 量级前再喂 Time2Vec。保留 nanosecond resolution 但避开 1e18 激活量级。
+- **方案 B**：切回 hour-normalized timestamp 即 Phase 3 Checkpoint 7 备选方案，承担 Time2Vec 容量损失换取 numerical stability。Phase 3 Checkpoint 7 当时选 ns-direct 是基于 Time2Vec 容量论证（hour-normalized 让 timestamp 范围太小 Time2Vec 的 sin/cos 周期表达能力浪费），但**当时没充分考虑 ns-scale 的 numerical instability 在大规模训练下的累积**——Phase 7 触发时是该决议被 revisit 的合理时机。
+- **方案 C**：保持 ns-direct + 仅对 time_enc.lin 单层做 weight scaling 把初始权重缩到 1e-15 量级让 init 激活落 O(1) 范围。最 surgical 但需要数学验证 trained 后权重是否会因为 SGD 自然漂移回大量级。
+
+**为何这是 Phase 7 而不是 Phase 4 议题**：Phase 4 Checkpoint 14 是 architecture forward + 梯度 sanity 验证不是大规模训练，Gate 2 通过 grad_norm > 1e-6 即可，2e14 数字是 Phase 7 时才需要解决的 numerical stability 问题。Phase 4 不前置实施，**Phase 7 launch 启动时本条目作为预设议程提醒**避免训练崩溃才回头追溯 root cause。
+
+**审计 anchor**：本条目是 Checkpoint 14 RFC-G3/G4-B（2026-05-06 user 拍板"加 entry"）的子议程，与主 entry "Gradient clipping 在 Phase 7 联合预训练 launch spec 必须显式启用" 一同构成 Phase 7 numerical health 完整议程。
 
 ### TGN msg_store 跨 batch 清理（2026-05-06，Checkpoint 9 发现）
 

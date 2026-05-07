@@ -619,4 +619,97 @@ Checkpoint 14（Phase 4 整体集成 + 七项 gate 验证，预计 2.5 天）：
 
 ---
 
-*下一条记录：Phase 4 / Checkpoint 14（七项 gate 验证）。*
+## Checkpoint 14 — Phase 4 整体集成 + 七项 gate 验证（Option β 形式闭环：5/7 PASS + 2/7 informational null finding）
+
+- **完成日期**：2026-05-07
+- **Commits**：`2eb712e`（RFC-1 决议 Phase 7 deep injection 训练成本预算提醒）+ 本 commit（主 commit：Phase4Model 集成 wrapper + 7 gate 验证 driver + Option A trained-state 测量协议 + 3 条 docs entries 含 Phase 12 论文素材"Cross-modal fusion init-state asymmetry"+ Phase 7 待办"Gradient clipping 必须启用"+ Phase 7 待办"Time2Vec ns-scale timestamp 持续监控"+ 收尾 docs 含 Phase 12 论文素材"MLM-overfit informational null finding"）
+- **方法论**：subagent-driven-development skill 第三次正式应用 + RFC-first 纪律两轮深度落地。Implementer 启动前发现 8 处 spec 歧义（含架构核心 RFC-1 BERT 注入方式 deep vs shallow）按纪律 STOP 不自己拍板，user 全部裁定后实施。Implementer 7 gate 验证发现 Gates 3/4 在 init 状态物理不可达再次按纪律 STOP，user 拍板 Option A trained-state 测量协议。Option A re-measurement 后 Gates 3/4 仍 fail，implementer 再次 STOP，user 最终拍板 Option β 形式闭环 5/7 PASS + 2/7 informational null finding 推进到 Checkpoint 14.5 真正考验。三轮 RFC 决议确认 Phase 4 创新模块工程纪律：前置 RFC 比后置 fix 便宜得多。
+
+### RFC 决议（user 拍板，2026-05-06 与 2026-05-07）
+
+**第一轮 RFC（实施前 8 问，2026-05-06）**：
+
+| RFC | 决议 | 关键 rationale |
+|---|---|---|
+| RFC-1 BERT 注入方式 | **Option A 深注入（ViLBERT 风格）** | 论文叙事"双向跨模态融合"必须匹配 deep injection；shallow 与 Phase 11 ablation B3 late fusion 区别太小被审稿人质疑 |
+| RFC-2 HTGN 可训练性 | trainable yes | Gate 2 显式要求 grad 流入 HTGN |
+| RFC-3 三套参数边界 | text_proj 单独 / HTGN 全部 / 其余 cross-attn 共享 + grad norm > 1e-6 阈值 | 1e-15 grad 数值非零工程零，1e-6 防 false positive |
+| RFC-4 entropy 聚合 | mean-aggregate per (fp, dir) 8 标量 + 全数字报告 | per-head 过严是诊断 gate 不是 sanity gate；分布形态对未来 audit 有用 |
+| RFC-5 比较对象 | fused_text + cos-sim mean + p10/p50/p90 | MLM logits 多走 head 投影模糊底层差异；percentile 防均值掩盖分布 |
+| RFC-6 overfit 阈值 | loss < 0.3 AND reduction > 90% | 0.5 偏松 0.1 在 30k vocab 下太紧 |
+| RFC-7 batch=16 语义 | 16 distinct K-hop subgraph + 绝对 VRAM 与时间 | launch spec 真实 PyG batched 语义；Phase 7 batch size 设计需绝对数字 |
+| RFC-8 random token 范围 | [104, 30678) 跳过 reserved | sanity gate 全 vocab uniform 无增量收益 |
+
+**第二轮 RFC（Gate 3/4 init fail，2026-05-07）**：
+
+Implementer 实施 Option A 深注入后 7 gate 首轮验证发现 Gates 3 entropy 全 ≈ 1.0 + Gate 4 cos-sim 1.0000 fail。诊断分析数学严谨：N=2000 graph nodes init 时 softmax 一致 → entropy 物理必然 = 1.0；cross-attention init 残差量级仅 0.12% of BERT residual norm → modality dropout 几乎无影响。是测量时机问题不是架构 fail。
+
+User 裁定 **Option A trained-state re-measurement**：driver 先跑 Gate 5 8-sample × 50-epoch overfit 拿到 trained model state 后立即用同一状态测 Gates 3 和 4 不重新初始化。docstring 与 commit message 明确"Gates 3 和 4 验证的是 trained fusion attention 行为而非 init prior，spec 措辞防退化与使用文本模态都隐含 trained context，由 Gate 5 overfit 训练提供该状态"避免未来 review 看到非线性测量顺序时疑惑。
+
+**第三轮 RFC（Option A re-measurement 仍 fail，2026-05-07）**：
+
+Option A 实施后 Gates 3/4 在 trained-state 上仍 fail（Gate 3 6/8 over upper bound，Gate 4 cos-sim 1.0000 trained-state 与 init-state 完全相同）。诊断揭露**架构级 insight**：8-sample MLM overfit 在 frozen BERT + trainable MLMHead 配置下不构成 fusion engagement 的有效 pressure。SGD 取最低阻力路径让 MLMHead 单独学映射 frozen_BERT_output → token_id，cross-attention 残差 init 量级 0.12% 太小 SGD 难以 break out 让 fusion 学到有用 → cross-attention 学到的策略是产生几乎为 0 contribution（uniform attention 弱聚合）。
+
+User 裁定三层路径：
+
+- **Option β（形式闭环路径）**：Phase 4 七项 gate 状态 5/7 PASS + 2/7 informational null finding，类似 Checkpoint 11.2-γ-1 informational null 范式。Phase 4 第二个 informational null finding。真正 fusion 效用判定推到 Checkpoint 14.5 anomaly probe 与 Phase 7-8 联合预训练。
+- **Option α（30 分钟补充诊断）**：在进入 14.5 之前跑一次 frozen BERT + frozen MLMHead 配置的 Gate 5 + Gate 3/4 重测，仅 HTGN + CrossModalAttention 可训练强迫 fusion 路径承担 MLM overfit 学习责任。两种结果都不影响 Phase 4 形式闭环也不影响 14.5 启动，仅影响 14.5 fail 时的回退路径决策速度。
+- **Option γ（推迟到 14.5 后视情况启用）**：在 CrossModalAttention 加可学习 scaling factor `λ` 让 `fused_text = BERT_residual + λ · tg_out_proj(tg_ctx)` 强制 fusion engage。如 14.5 通过双条件 γ 永久不需要实施。
+
+### 实现交付
+
+**`src/loghetero/models/phase4_model.py`** — Phase 4 集成 wrapper（Phase4Model class）：
+
+- 持有 frozen `bert-base-uncased` + trainable HTGN + 4 × CrossModalAttention（独立参数 per fusion point at BERT layers 3/6/9/12 0-indexed）+ trainable ModifiedMLMHead
+- **Option A 深注入实施**：`forward` 手动迭代 BERT encoder layer 用 `bert.encoder.layer[i].forward(hidden_states, attention_mask, ...)`，在 layer 3/6/9/12 0-indexed 后调 CrossModalAttention[k] 让 `fused_text` 作为 layer i+1 输入，graph 信息真正进入 BERT 计算路径
+- **Option b（fully bidirectional）**实施：`fused_text` 与 `fused_graph` 都在 fusion point 间传递，graph 也得到 text 更新（implementer 文档 ViLBERT reference）
+- BERT layer iteration 中 `extended_attention_mask` 准备复制自 `BertModel.forward`，`torch.no_grad()` 包裹 BertLayer（BERT 冻结），CrossModalAttention 在 no_grad 外让 fusion 参数受梯度
+
+**`tests/test_phase4_model.py`** — 8 单元测试（shape sanity / 4 fusion point 独立 params / fusion 在正确 layer 触发 / forward 不抛 / etc.），8/8 PASS
+
+**`scripts/checkpoint14_seven_gate_verify.py`** — 7-gate 验证 driver：
+
+- Option A trained-state 测量协议：Gate 5 先跑 → trained model state → Gates 3 和 4 用同一状态测
+- 七项 gate 全数字报告含所有 RFC tightening（Gate 2 三类代表 grad norm + Gate 3 8 标量具体数 + Gates 4&6 cos-sim mean+p10/50/90 + Gate 5 epoch1/50 loss + reduction% + Gate 7 absolute VRAM in GB + median step ms）
+
+### 七项 gate 实测数字（最终，Option A trained-state）
+
+| Gate | 状态 | 数字 |
+|---|---|---|
+| 1 forward+backward batch=8 | ✅ PASS | loss 9.72，shape (8,50,768) + (8,2000,256)，无 NaN/Inf |
+| 2 三套参数 grad norm > 1e-6 | ✅ PASS | bert_proj `text_proj.weight` 4.534e-01 / htgn `time_enc.lin.weight` **2.016e+14**（已落 Phase 7 待办 gradient clipping entry）/ cross_attn `graph_proj.weight` 3.591e+00 |
+| 3 entropy ∈ [0.3, 0.95] | ⚠️ informational null | trained-state 8 标量：text→graph 0.9995 / 0.9999 / 1.0000 / 0.9946（4/4 over upper bound）；graph→text 0.8494 / 0.9676 / 0.4925 / 0.9959（2/4 over，2/4 in-range） |
+| 4 modality dropout cos-sim < 0.95 | ⚠️ informational null | trained-state mean = p10 = p50 = p90 = 1.0000，与 init-state 完全相同 |
+| 5 8-sample × 50-epoch overfit | ✅ PASS | epoch1 10.52 → epoch50 0.000224，reduction 100% |
+| 6 random text cos-sim < 0.9 | ✅ PASS | mean 0.4315 / p10 0.3323 / p50 0.4208 / p90 0.5302 |
+| 7 batch=16 真实 PyG batched | ✅ PASS | **VRAM 5.126 GB / 单步 205.2 ms median**（Phase 7 batch size 设计 single source of truth） |
+
+### 决策点
+
+- **Option β 闭环 vs Option C 跳过 vs Option B 放宽阈值**：user 拍板 Option β（informational null）而非 Option B（放宽阈值让两 gate 失去诊断意义）也非 Option C（跳过 7 项缩成 5 项严重弱化 Phase 4 收尾验证）。Option β 与 Phase 4 入口 Checkpoint 11.2-γ-1 informational null 模式一致，为论文 negative-result-as-positive-contribution 叙事增加第二个 audit anchor。
+- **Phase 4 双 informational null 的 paper-grade 价值**：C11.2-γ-1（BERT input-feature injection on structure-dominated link prediction 无 lift） + C14 Gates 3/4（cross-modal fusion 在 small-batch MLM overfit 下不自发 engage 图路径），两个 null 形成"任务结构决定 cross-modal 价值实证机制"的工程方法论 contribution。论文 Methods 章节"4.x Cross-modal fusion verification protocol design lessons" 子节作为 reproducibility & methodology 工程纪律 evidence。
+- **deep injection 架构选择 trade-off**：RFC-1 选 Option A 深注入而非 Option B 浅注入，Phase 7 训练成本预期高 30-60% VRAM + 2-3x 单 step 时间，已落 Phase 7 待办 "Deep cross-modal injection 训练成本预算提醒" 作为 Phase 7 batch size 设计 + Phase 11 ablation B3 deep vs shallow vs late fusion 三档对比 trade-off cost-benefit 透明 evidence。
+- **HTGN time_enc grad_norm 2.016e+14 处理**：Gate 2 阈值 > 1e-6 通过但工程上是异常梯度爆炸量级，Phase 7 必须双保险 gradient clipping `torch.nn.utils.clip_grad_norm_(max_norm=5.0)` + Lightning `gradient_clip_val=5.0`，已落 Phase 7 待办 "Gradient clipping 必须启用" entry 作为 Phase 7 launch single source of truth。Time2Vec ns-scale timestamp 数值 instability 是 root cause（gradient clipping 是 symptom mitigation），Phase 7 大规模训练若仍 NaN frequent 触发回到 Phase 3 Checkpoint 7 RFC 重评估，已落 Phase 7 待办 "Time2Vec ns-scale timestamp 数值健康度持续监控" 子议程。
+
+### 执行 Checkpoint 14 launch spec 完成清单
+
+- [x] Phase4Model 集成 wrapper 落地（deep injection + bidirectional update）
+- [x] 七项 gate 验证 driver（Option A trained-state 测量协议）
+- [x] Gate 1/2/5/6/7 PASS 完整数字报告（RFC tightening 全部满足）
+- [x] Gate 3/4 informational null finding 完整诊断分析（SGD 路径 + 残差量级 + MLMHead 容量充分性）落 Phase 12 论文素材
+- [x] 8 单元测试 + ruff + mypy + 全 suite passed
+- [x] Phase 7 待办 3 entries（deep injection 训练成本预算 + gradient clipping 启用 + Time2Vec 持续监控）
+- [x] Phase 12 论文素材 2 entries（init-state asymmetry + MLM-overfit informational null finding）
+- [x] PROGRESS.md / CHECKPOINT_LOG.md 同步更新
+
+### 下一步
+
+**Step 2（当前 commit 落档后立即）**：Option α 30 分钟补充诊断单 agent 直跑（exempt from 4 步 pattern per known_issues.md::Phase 12 论文素材::multi-agent review pattern::"例外情况" clause）。Driver 临时改 BERT 与 MLMHead 同时冻结，仅 HTGN + CrossModalAttention 可训练，重跑 Gate 5 + Gates 3/4。结果按预定解读框架记录不影响 14.5 启动。
+
+**Step 3**：Option α 完成后立即派 Checkpoint 14.5 implementer 走完整 4 步 pattern + RFC-first 纪律启动异常检测前置 probe（5 个 ATT&CK TTP 模板纯本地实现禁外部 LLM API + within-TTP 80/20 holdout + HTGN-only / BERT-only / fusion 三配置 30 epoch 4 seed + 双条件门槛 lift ≥ 0.03 + paired t-test p<0.1 + BERT-only ≠ fusion）。
+
+**Step 4**：14.5 通过双条件门槛后申请 v0.4-fusion tag 完成 Phase 4 主体进入创新点二 Phase 5 RAPA 攻击模板实施阶段。如 14.5 fail 结合 Option α 结果启动架构级 RFC 评估 Option γ 与其他架构修复路径。
+
+---
+
+*下一条记录：Phase 4 / Option α 补充诊断（frozen BERT + frozen MLMHead 30 分钟单 agent 直跑），随后 Checkpoint 14.5 异常检测前置 probe。*
