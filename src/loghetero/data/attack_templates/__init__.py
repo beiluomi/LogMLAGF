@@ -12,6 +12,10 @@ Phase 5 templates (Checkpoint 15 Cycle A-F, RFC adjudication):
     - T1055:     Process Injection via svchost (8 events)
     - T1068:     Exploitation for Privilege Escalation via kernel driver (8 events)
     - T1021.001: RDP lateral movement / single-host approximation (8 events)
+    - T1566.001: Spearphishing Attachment (7 events)
+    - T1078:     Valid Accounts credential abuse (7 events)
+    - T1057:     Process Discovery via tasklist + findstr (7 events)
+    - T1083:     File and Directory Discovery via dir_enum (8 events)
 
 Usage::
 
@@ -27,12 +31,18 @@ from loghetero.data.attack_templates.t1003_001_lsass_memory import T1003001Lsass
 from loghetero.data.attack_templates.t1021_001_rdp import T1021001RDP
 from loghetero.data.attack_templates.t1041_exfiltration import T1041Exfiltration
 from loghetero.data.attack_templates.t1055_process_injection import T1055ProcessInjection
+from loghetero.data.attack_templates.t1057_process_discovery import T1057ProcessDiscovery
 from loghetero.data.attack_templates.t1059_001_powershell import T1059001PowerShell
 from loghetero.data.attack_templates.t1068_exploitation_for_privesc import (
     T1068ExploitationForPrivEsc,
 )
 from loghetero.data.attack_templates.t1071_001_web_protocols import T1071001WebProtocols
+from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
+from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
 from loghetero.data.attack_templates.t1547_001_registry_run_keys import T1547001RegistryRunKeys
+from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
+    T1566001SpearphishingAttachment,
+)
 
 ALL_TEMPLATES: list[AttackTemplate] = [
     T1059001PowerShell(),
@@ -43,6 +53,10 @@ ALL_TEMPLATES: list[AttackTemplate] = [
     T1055ProcessInjection(),
     T1068ExploitationForPrivEsc(),
     T1021001RDP(),
+    T1566001SpearphishingAttachment(),
+    T1078ValidAccounts(),
+    T1057ProcessDiscovery(),
+    T1083FileDiscovery(),
 ]
 
 __all__ = [
@@ -55,5 +69,9 @@ __all__ = [
     "T1055ProcessInjection",
     "T1068ExploitationForPrivEsc",
     "T1021001RDP",
+    "T1566001SpearphishingAttachment",
+    "T1078ValidAccounts",
+    "T1057ProcessDiscovery",
+    "T1083FileDiscovery",
     "ALL_TEMPLATES",
 ]

@@ -12,6 +12,8 @@ Tests verify:
     subject of USER_PRIV_GRANT, inventory entry #2) + vuln_driver.sys file node
   - Phase 5 / Checkpoint 15 Cycle C: T1021.001 RDP single-host approximation
     workaround #3 (source-host-only view, USER_EXPLICIT_LOGON seed event)
+  - Phase 5 / Checkpoint 15 Cycle D: T1566.001, T1078, T1057, T1083 (no schema
+    workarounds; all triples in ALLOWED_EDGE_TRIPLES natively)
 
 These tests are pure Python + loghetero imports; no ATLAS data required.
 """
@@ -52,10 +54,10 @@ def _make_template_call(template_cls: type, seed: int = 42, iid: int = 0) -> lis
 
 
 def test_all_templates_import() -> None:
-    """ALL_TEMPLATES must contain exactly 8 templates (5 Phase 4 + 3 Phase 5: T1055+T1068+T1021.001)."""
+    """ALL_TEMPLATES must contain exactly 12 templates (5 Phase 4 + 7 Phase 5: Cycles A-D)."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
 
-    assert len(ALL_TEMPLATES) == 8, f"Expected 8 templates, got {len(ALL_TEMPLATES)}"
+    assert len(ALL_TEMPLATES) == 12, f"Expected 12 templates, got {len(ALL_TEMPLATES)}"
 
 
 def test_all_template_ttp_ids() -> None:
@@ -71,6 +73,10 @@ def test_all_template_ttp_ids() -> None:
         "T1055",
         "T1068",
         "T1021.001",
+        "T1566.001",
+        "T1078",
+        "T1057",
+        "T1083",
     }
     actual_ids = {t.ttp_id for t in ALL_TEMPLATES}
     assert actual_ids == expected_ids
@@ -383,7 +389,7 @@ def test_injector_total_event_count() -> None:
 
     expected_attack = (
         len(ALL_TEMPLATES) * EVENTS_PER_TTP
-    )  # 8 * 100 = 800 (Phase 5 adds T1055 + T1068 + T1021.001)
+    )  # 12 * 100 = 1200 (Phase 5 Cycles A-D adds T1055+T1068+T1021.001+T1566.001+T1078+T1057+T1083)
     assert attack_count == expected_attack, f"Attack count {attack_count} != {expected_attack}"
     assert (
         benign_count == NUM_BENIGN_MATCHED
@@ -437,7 +443,7 @@ def test_injector_train_test_split_ratio() -> None:
 
 
 def test_injector_per_ttp_entries() -> None:
-    """SyntheticInjector must produce entries for all 8 TTP ids (Phase 4 x5 + Phase 5 T1055+T1068+T1021.001)."""
+    """SyntheticInjector must produce entries for all 12 TTP ids (Phase 4 x5 + Phase 5 Cycles A-D)."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
     from loghetero.data.parsers.base import EdgeType, Event, NodeType
     from loghetero.data.synthetic_injector import SyntheticInjector
@@ -472,6 +478,10 @@ def test_injector_per_ttp_entries() -> None:
         "T1055",
         "T1068",
         "T1021.001",
+        "T1566.001",
+        "T1078",
+        "T1057",
+        "T1083",
     }
     assert set(dataset.per_ttp_events.keys()) == expected_ids
 
@@ -1060,3 +1070,547 @@ def test_t1021_001_labels_are_1() -> None:
     events = _make_template_call(T1021001RDP)
     for ev in events:
         assert ev.attributes.get("label") == 1
+
+
+# ---------------------------------------------------------------------------
+# T1566.001 Spearphishing Attachment (Phase 5 / Checkpoint 15 Cycle D)
+# ---------------------------------------------------------------------------
+
+
+def test_t1566_001_generates_7_events() -> None:
+    """T1566.001 must generate exactly 7 events."""
+    from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
+        T1566001SpearphishingAttachment,
+    )
+
+    events = _make_template_call(T1566001SpearphishingAttachment)
+    assert len(events) == 7, f"Expected 7 events, got {len(events)}"
+
+
+def test_t1566_001_event_types() -> None:
+    """T1566.001 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    No schema workaround needed: all 7 triples are natively in ALLOWED_EDGE_TRIPLES.
+    """
+    from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
+        T1566001SpearphishingAttachment,
+    )
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType
+
+    events = _make_template_call(T1566001SpearphishingAttachment)
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1566.001"
+
+
+def test_t1566_001_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
+        T1566001SpearphishingAttachment,
+    )
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1566001SpearphishingAttachment)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1566_001_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
+        T1566001SpearphishingAttachment,
+    )
+
+    events = _make_template_call(T1566001SpearphishingAttachment)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1566_001_timestamps_in_window() -> None:
+    """All T1566.001 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
+        T1566001SpearphishingAttachment,
+    )
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1566001SpearphishingAttachment()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1566_001_labels_are_1() -> None:
+    """All T1566.001 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
+        T1566001SpearphishingAttachment,
+    )
+
+    events = _make_template_call(T1566001SpearphishingAttachment)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+def test_t1566_001_macro_execution_chain() -> None:
+    """Validate the spearphishing macro execution chain.
+
+    Verifies the characteristic parent-process ancestry:
+    - Event 3 (index 2): outlook.exe spawns winword.exe (PROCESS_CREATE)
+    - Event 4 (index 3): winword.exe spawns cmd.exe (PROCESS_CREATE)
+    - Event 5 (index 4): cmd.exe spawns dropper.exe (PROCESS_CREATE)
+    This ancestry chain distinguishes T1566.001 from other Initial Access TTPs.
+    """
+    from loghetero.data.attack_templates.t1566_001_spearphishing_attachment import (
+        T1566001SpearphishingAttachment,
+    )
+    from loghetero.data.parsers.base import EdgeType, NodeType
+
+    iid = 4
+    template = T1566001SpearphishingAttachment()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    # Event 3 (index 2): outlook.exe -> PROCESS_CREATE -> winword.exe
+    ev_outlook_winword = events[2]
+    assert ev_outlook_winword.operation == EdgeType.PROCESS_CREATE.value
+    assert f"atk_{iid}_outlook.exe" in ev_outlook_winword.subject
+    assert f"atk_{iid}_winword.exe" in ev_outlook_winword.obj
+    assert ev_outlook_winword.subject_type == NodeType.process
+    assert ev_outlook_winword.obj_type == NodeType.process
+
+    # Event 4 (index 3): winword.exe -> PROCESS_CREATE -> cmd.exe (macro shell)
+    ev_winword_cmd = events[3]
+    assert ev_winword_cmd.operation == EdgeType.PROCESS_CREATE.value
+    assert f"atk_{iid}_winword.exe" in ev_winword_cmd.subject
+    assert f"atk_{iid}_cmd.exe" in ev_winword_cmd.obj
+
+    # Event 5 (index 4): cmd.exe -> PROCESS_CREATE -> dropper.exe
+    ev_cmd_dropper = events[4]
+    assert ev_cmd_dropper.operation == EdgeType.PROCESS_CREATE.value
+    assert f"atk_{iid}_cmd.exe" in ev_cmd_dropper.subject
+    assert f"atk_{iid}_dropper.exe" in ev_cmd_dropper.obj
+
+
+# ---------------------------------------------------------------------------
+# T1078 Valid Accounts (Phase 5 / Checkpoint 15 Cycle D)
+# ---------------------------------------------------------------------------
+
+
+def test_t1078_generates_7_events() -> None:
+    """T1078 must generate exactly 7 events."""
+    from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
+
+    events = _make_template_call(T1078ValidAccounts)
+    assert len(events) == 7, f"Expected 7 events, got {len(events)}"
+
+
+def test_t1078_event_types() -> None:
+    """T1078 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    Specifically verifies that USER_LOGON_FAIL triple is in ALLOWED_EDGE_TRIPLES
+    (added Q-1, similar to USER_LOGON).
+    """
+    from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType, NodeType
+
+    events = _make_template_call(T1078ValidAccounts)
+
+    # Confirm the USER_LOGON_FAIL triple is in ALLOWED_EDGE_TRIPLES before looping.
+    fail_triple = (NodeType.user, EdgeType.USER_LOGON_FAIL, NodeType.process)
+    assert fail_triple in ALLOWED_EDGE_TRIPLES, (
+        "(user, USER_LOGON_FAIL, process) not in ALLOWED_EDGE_TRIPLES -- "
+        "Q-1 mini-checkpoint addition may be missing."
+    )
+
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1078"
+
+
+def test_t1078_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1078ValidAccounts)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1078_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
+
+    events = _make_template_call(T1078ValidAccounts)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1078_timestamps_in_window() -> None:
+    """All T1078 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1078ValidAccounts()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1078_labels_are_1() -> None:
+    """All T1078 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
+
+    events = _make_template_call(T1078ValidAccounts)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+def test_t1078_logon_fail_then_success() -> None:
+    """Validate the fail-fail-success logon pattern characteristic of T1078.
+
+    Verifies:
+    - Events 1 and 2 (index 0, 1) are USER_LOGON_FAIL with seed_user as subject.
+    - Event 3 (index 2) is USER_LOGON with seed_user as subject (successful stolen creds).
+    - Event 4 (index 3) is USER_PRIV_GRANT with seed_user as subject.
+    - Events 5-7 (index 4-6) use target_svc.exe as subject (post-auth activity).
+    """
+    from loghetero.data.attack_templates.t1078_valid_accounts import T1078ValidAccounts
+    from loghetero.data.parsers.base import EdgeType, NodeType
+
+    iid = 6
+    template = T1078ValidAccounts()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    # Events 1 and 2: USER_LOGON_FAIL with seed_user subject
+    for idx in (0, 1):
+        ev = events[idx]
+        assert (
+            ev.operation == EdgeType.USER_LOGON_FAIL.value
+        ), f"Event {idx + 1} must be USER_LOGON_FAIL, got {ev.operation!r}"
+        assert (
+            ev.subject == "victim_user"
+        ), f"Event {idx + 1} subject must be seed_user, got {ev.subject!r}"
+        assert ev.subject_type == NodeType.user
+
+    # Event 3: USER_LOGON (successful) with seed_user subject
+    ev_logon = events[2]
+    assert (
+        ev_logon.operation == EdgeType.USER_LOGON.value
+    ), f"Event 3 must be USER_LOGON (success), got {ev_logon.operation!r}"
+    assert ev_logon.subject == "victim_user"
+
+    # Event 4: USER_PRIV_GRANT with seed_user subject
+    ev_priv = events[3]
+    assert (
+        ev_priv.operation == EdgeType.USER_PRIV_GRANT.value
+    ), f"Event 4 must be USER_PRIV_GRANT, got {ev_priv.operation!r}"
+    assert ev_priv.subject == "victim_user"
+
+    # Events 5-7: target_svc.exe as subject (post-auth service activity)
+    target_svc = f"atk_{iid}_target_svc.exe"
+    for idx in (4, 5, 6):
+        ev = events[idx]
+        assert ev.subject == target_svc, (
+            f"Event {idx + 1} subject must be {target_svc!r} (post-auth), " f"got {ev.subject!r}"
+        )
+        assert ev.subject_type == NodeType.process
+
+
+# ---------------------------------------------------------------------------
+# T1057 Process Discovery (Phase 5 / Checkpoint 15 Cycle D)
+# ---------------------------------------------------------------------------
+
+
+def test_t1057_generates_7_events() -> None:
+    """T1057 must generate exactly 7 events."""
+    from loghetero.data.attack_templates.t1057_process_discovery import T1057ProcessDiscovery
+
+    events = _make_template_call(T1057ProcessDiscovery)
+    assert len(events) == 7, f"Expected 7 events, got {len(events)}"
+
+
+def test_t1057_event_types() -> None:
+    """T1057 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    No schema workaround needed: all 7 triples are natively in ALLOWED_EDGE_TRIPLES.
+    """
+    from loghetero.data.attack_templates.t1057_process_discovery import T1057ProcessDiscovery
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType
+
+    events = _make_template_call(T1057ProcessDiscovery)
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1057"
+
+
+def test_t1057_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1057_process_discovery import T1057ProcessDiscovery
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1057ProcessDiscovery)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1057_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1057_process_discovery import T1057ProcessDiscovery
+
+    events = _make_template_call(T1057ProcessDiscovery)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1057_timestamps_in_window() -> None:
+    """All T1057 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1057_process_discovery import T1057ProcessDiscovery
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1057ProcessDiscovery()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1057_labels_are_1() -> None:
+    """All T1057 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1057_process_discovery import T1057ProcessDiscovery
+
+    events = _make_template_call(T1057ProcessDiscovery)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+def test_t1057_findstr_reads_process_list() -> None:
+    """Validate the findstr.exe AV-evasion discovery pattern.
+
+    Verifies:
+    - Event 4 (index 3): tasklist.exe spawns findstr.exe (PROCESS_CREATE).
+    - Event 5 (index 4): findstr.exe reads process_list.txt (FILE_READ).
+    - Event 6 (index 5): findstr.exe writes av_processes.txt (FILE_WRITE).
+    The findstr search-and-filter pattern is the key behavioral signature of T1057.
+    """
+    from loghetero.data.attack_templates.t1057_process_discovery import T1057ProcessDiscovery
+    from loghetero.data.parsers.base import EdgeType, NodeType
+
+    iid = 2
+    template = T1057ProcessDiscovery()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    tasklist = f"atk_{iid}_tasklist.exe"
+    findstr = f"atk_{iid}_findstr.exe"
+    process_list = f"atk_{iid}_process_list.txt"
+    av_processes = f"atk_{iid}_av_processes.txt"
+
+    # Event 4 (index 3): tasklist.exe -> PROCESS_CREATE -> findstr.exe
+    ev_spawn = events[3]
+    assert ev_spawn.operation == EdgeType.PROCESS_CREATE.value
+    assert ev_spawn.subject == tasklist
+    assert ev_spawn.obj == findstr
+    assert ev_spawn.obj_type == NodeType.process
+
+    # Event 5 (index 4): findstr.exe -> FILE_READ -> process_list.txt
+    ev_read = events[4]
+    assert ev_read.operation == EdgeType.FILE_READ.value
+    assert ev_read.subject == findstr
+    assert ev_read.obj == process_list
+    assert ev_read.obj_type == NodeType.file
+
+    # Event 6 (index 5): findstr.exe -> FILE_WRITE -> av_processes.txt
+    ev_write = events[5]
+    assert ev_write.operation == EdgeType.FILE_WRITE.value
+    assert ev_write.subject == findstr
+    assert ev_write.obj == av_processes
+    assert ev_write.obj_type == NodeType.file
+
+
+# ---------------------------------------------------------------------------
+# T1083 File and Directory Discovery (Phase 5 / Checkpoint 15 Cycle D)
+# ---------------------------------------------------------------------------
+
+
+def test_t1083_generates_8_events() -> None:
+    """T1083 must generate exactly 8 events."""
+    from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
+
+    events = _make_template_call(T1083FileDiscovery)
+    assert len(events) == 8, f"Expected 8 events, got {len(events)}"
+
+
+def test_t1083_event_types() -> None:
+    """T1083 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    Specifically verifies that event 3 uses FILE_ACCESS (ATLAS EventID 4663) with
+    triple (process, FILE_ACCESS, file) which IS in ALLOWED_EDGE_TRIPLES.
+    """
+    from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType, NodeType
+
+    events = _make_template_call(T1083FileDiscovery)
+
+    # Confirm the FILE_ACCESS triple is present before looping.
+    access_triple = (NodeType.process, EdgeType.FILE_ACCESS, NodeType.file)
+    assert access_triple in ALLOWED_EDGE_TRIPLES, (
+        "(process, FILE_ACCESS, file) not in ALLOWED_EDGE_TRIPLES -- "
+        "ATLAS EventID 4663 FILE_ACCESS entry may be missing."
+    )
+
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1083"
+
+
+def test_t1083_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1083FileDiscovery)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1083_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
+
+    events = _make_template_call(T1083FileDiscovery)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1083_timestamps_in_window() -> None:
+    """All T1083 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1083FileDiscovery()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1083_labels_are_1() -> None:
+    """All T1083 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
+
+    events = _make_template_call(T1083FileDiscovery)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+def test_t1083_file_access_c_drive_root() -> None:
+    """Validate FILE_ACCESS (ATLAS 4663) for C: drive root traversal in T1083.
+
+    Event 3 (index 2) must use FILE_ACCESS (not FILE_READ/FILE_OPEN) to model
+    ATLAS EventID 4663 generic file system access for the directory traversal
+    start point. This is the key schema distinction for T1083.
+    """
+    from loghetero.data.attack_templates.t1083_file_discovery import T1083FileDiscovery
+    from loghetero.data.parsers.base import EdgeType, NodeType
+
+    iid = 9
+    template = T1083FileDiscovery()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    dir_enum = f"atk_{iid}_dir_enum.exe"
+    c_drive_root = f"atk_{iid}_C_drive_root"
+
+    # Event 3 (index 2): dir_enum.exe -> FILE_ACCESS -> C_drive_root (ATLAS 4663)
+    ev_access = events[2]
+    assert ev_access.operation == EdgeType.FILE_ACCESS.value, (
+        f"Event 3 must use FILE_ACCESS (ATLAS EventID 4663) for C: drive root traversal, "
+        f"got {ev_access.operation!r}. FILE_ACCESS (not FILE_READ/FILE_OPEN) is the "
+        f"correct ATLAS event for generic directory object access."
+    )
+    assert (
+        ev_access.subject == dir_enum
+    ), f"Event 3 subject must be {dir_enum!r}, got {ev_access.subject!r}"
+    assert (
+        ev_access.obj == c_drive_root
+    ), f"Event 3 object must be {c_drive_root!r}, got {ev_access.obj!r}"
+    assert ev_access.subject_type == NodeType.process
+    assert ev_access.obj_type == NodeType.file
+
+    # Verify event 7 (index 6): cmd.exe reads file_listing.txt (post-processing)
+    file_listing = f"atk_{iid}_file_listing.txt"
+    ev_cmd_read = events[6]
+    assert ev_cmd_read.operation == EdgeType.FILE_READ.value
+    assert f"atk_{iid}_cmd.exe" in ev_cmd_read.subject
+    assert ev_cmd_read.obj == file_listing
