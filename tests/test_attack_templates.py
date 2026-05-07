@@ -54,10 +54,10 @@ def _make_template_call(template_cls: type, seed: int = 42, iid: int = 0) -> lis
 
 
 def test_all_templates_import() -> None:
-    """ALL_TEMPLATES must contain exactly 12 templates (5 Phase 4 + 7 Phase 5: Cycles A-D)."""
+    """ALL_TEMPLATES must contain exactly 16 templates (5 Phase 4 + 11 Phase 5: Cycles A-E)."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
 
-    assert len(ALL_TEMPLATES) == 12, f"Expected 12 templates, got {len(ALL_TEMPLATES)}"
+    assert len(ALL_TEMPLATES) == 16, f"Expected 16 templates, got {len(ALL_TEMPLATES)}"
 
 
 def test_all_template_ttp_ids() -> None:
@@ -77,6 +77,10 @@ def test_all_template_ttp_ids() -> None:
         "T1078",
         "T1057",
         "T1083",
+        "T1027",
+        "T1070.004",
+        "T1053.005",
+        "T1543.003",
     }
     actual_ids = {t.ttp_id for t in ALL_TEMPLATES}
     assert actual_ids == expected_ids
@@ -389,7 +393,7 @@ def test_injector_total_event_count() -> None:
 
     expected_attack = (
         len(ALL_TEMPLATES) * EVENTS_PER_TTP
-    )  # 12 * 100 = 1200 (Phase 5 Cycles A-D adds T1055+T1068+T1021.001+T1566.001+T1078+T1057+T1083)
+    )  # 16 * 100 = 1600 (Phase 5 Cycles A-E adds T1055+T1068+T1021.001+T1566.001+T1078+T1057+T1083+T1027+T1070.004+T1053.005+T1543.003)
     assert attack_count == expected_attack, f"Attack count {attack_count} != {expected_attack}"
     assert (
         benign_count == NUM_BENIGN_MATCHED
@@ -443,7 +447,7 @@ def test_injector_train_test_split_ratio() -> None:
 
 
 def test_injector_per_ttp_entries() -> None:
-    """SyntheticInjector must produce entries for all 12 TTP ids (Phase 4 x5 + Phase 5 Cycles A-D)."""
+    """SyntheticInjector must produce entries for all 16 TTP ids (Phase 4 x5 + Phase 5 Cycles A-E)."""
     from loghetero.data.attack_templates import ALL_TEMPLATES
     from loghetero.data.parsers.base import EdgeType, Event, NodeType
     from loghetero.data.synthetic_injector import SyntheticInjector
@@ -482,6 +486,10 @@ def test_injector_per_ttp_entries() -> None:
         "T1078",
         "T1057",
         "T1083",
+        "T1027",
+        "T1070.004",
+        "T1053.005",
+        "T1543.003",
     }
     assert set(dataset.per_ttp_events.keys()) == expected_ids
 
@@ -1614,3 +1622,567 @@ def test_t1083_file_access_c_drive_root() -> None:
     assert ev_cmd_read.operation == EdgeType.FILE_READ.value
     assert f"atk_{iid}_cmd.exe" in ev_cmd_read.subject
     assert ev_cmd_read.obj == file_listing
+
+
+# ---------------------------------------------------------------------------
+# T1027 Obfuscated Files (Phase 5 / Checkpoint 15 Cycle E)
+# ---------------------------------------------------------------------------
+
+
+def test_t1027_generates_7_events() -> None:
+    """T1027 must generate exactly 7 events."""
+    from loghetero.data.attack_templates.t1027_obfuscated_files import T1027ObfuscatedFiles
+
+    events = _make_template_call(T1027ObfuscatedFiles)
+    assert len(events) == 7, f"Expected 7 events, got {len(events)}"
+
+
+def test_t1027_event_types() -> None:
+    """T1027 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    No schema workaround needed: all 7 triples are natively in ALLOWED_EDGE_TRIPLES.
+    """
+    from loghetero.data.attack_templates.t1027_obfuscated_files import T1027ObfuscatedFiles
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType
+
+    events = _make_template_call(T1027ObfuscatedFiles)
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1027"
+
+
+def test_t1027_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1027_obfuscated_files import T1027ObfuscatedFiles
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1027ObfuscatedFiles)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1027_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1027_obfuscated_files import T1027ObfuscatedFiles
+
+    events = _make_template_call(T1027ObfuscatedFiles)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1027_timestamps_in_window() -> None:
+    """All T1027 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1027_obfuscated_files import T1027ObfuscatedFiles
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1027ObfuscatedFiles()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1027_labels_are_1() -> None:
+    """All T1027 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1027_obfuscated_files import T1027ObfuscatedFiles
+
+    events = _make_template_call(T1027ObfuscatedFiles)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+def test_t1027_certutil_decode_chain() -> None:
+    """Validate the certutil LOLBin decode chain behavioral signature.
+
+    Verifies:
+    - Event 2 (index 1): certutil.exe FILE_READ encoded_payload.b64
+    - Event 3 (index 2): certutil.exe FILE_WRITE decoded_payload.exe
+    - Event 4 (index 3): certutil.exe PROCESS_CREATE decoded_payload.exe
+    - Event 5 (index 4): decoded_payload.exe FILE_READ decoded_payload.exe (self-read)
+    - Events 6-7 (index 5-6): decoded_payload.exe NET_CONNECT + NET_SEND_NETWORK to c2
+    The certutil decode + execute chain distinguishes T1027 from other Defense Evasion TTPs.
+    """
+    from loghetero.data.attack_templates.t1027_obfuscated_files import T1027ObfuscatedFiles
+    from loghetero.data.parsers.base import EdgeType, NodeType
+
+    iid = 11
+    template = T1027ObfuscatedFiles()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    certutil = f"atk_{iid}_certutil.exe"
+    encoded = f"atk_{iid}_encoded_payload.b64"
+    decoded = f"atk_{iid}_decoded_payload.exe"
+
+    # Event 2 (index 1): certutil.exe reads encoded payload
+    ev_read_enc = events[1]
+    assert ev_read_enc.operation == EdgeType.FILE_READ.value
+    assert ev_read_enc.subject == certutil
+    assert ev_read_enc.obj == encoded
+    assert ev_read_enc.obj_type == NodeType.file
+
+    # Event 3 (index 2): certutil.exe writes decoded binary
+    ev_write_dec = events[2]
+    assert ev_write_dec.operation == EdgeType.FILE_WRITE.value
+    assert ev_write_dec.subject == certutil
+    assert ev_write_dec.obj == decoded
+    assert ev_write_dec.obj_type == NodeType.file
+
+    # Event 4 (index 3): certutil.exe spawns decoded payload (process)
+    ev_create = events[3]
+    assert ev_create.operation == EdgeType.PROCESS_CREATE.value
+    assert ev_create.subject == certutil
+    assert ev_create.obj == decoded
+    assert ev_create.obj_type == NodeType.process
+
+    # Event 5 (index 4): decoded_payload self-reads its own image (file node)
+    ev_self_read = events[4]
+    assert ev_self_read.operation == EdgeType.FILE_READ.value
+    assert ev_self_read.subject == decoded
+    assert ev_self_read.subject_type == NodeType.process
+    assert ev_self_read.obj == decoded
+    assert ev_self_read.obj_type == NodeType.file
+
+    # Events 6-7 (index 5-6): C2 connect then send
+    ev_net_connect = events[5]
+    assert ev_net_connect.operation == EdgeType.NET_CONNECT.value
+    assert ev_net_connect.subject == decoded
+    assert ev_net_connect.subject_type == NodeType.process
+    assert ev_net_connect.obj_type == NodeType.network
+
+    ev_net_send = events[6]
+    assert ev_net_send.operation == EdgeType.NET_SEND_NETWORK.value
+    assert ev_net_send.subject == decoded
+    assert ev_net_send.obj == ev_net_connect.obj
+
+
+# ---------------------------------------------------------------------------
+# T1070.004 File Deletion (Phase 5 / Checkpoint 15 Cycle E)
+# ---------------------------------------------------------------------------
+
+
+def test_t1070_004_generates_7_events() -> None:
+    """T1070.004 must generate exactly 7 events."""
+    from loghetero.data.attack_templates.t1070_004_file_deletion import T1070004FileDeletion
+
+    events = _make_template_call(T1070004FileDeletion)
+    assert len(events) == 7, f"Expected 7 events, got {len(events)}"
+
+
+def test_t1070_004_event_types() -> None:
+    """T1070.004 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    No schema workaround needed: FILE_DELETE is natively in ALLOWED_EDGE_TRIPLES
+    (already confirmed present by T1041 Exfiltration tests).
+    """
+    from loghetero.data.attack_templates.t1070_004_file_deletion import T1070004FileDeletion
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType
+
+    events = _make_template_call(T1070004FileDeletion)
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1070.004"
+
+
+def test_t1070_004_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1070_004_file_deletion import T1070004FileDeletion
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1070004FileDeletion)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1070_004_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1070_004_file_deletion import T1070004FileDeletion
+
+    events = _make_template_call(T1070004FileDeletion)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1070_004_timestamps_in_window() -> None:
+    """All T1070.004 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1070_004_file_deletion import T1070004FileDeletion
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1070004FileDeletion()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1070_004_labels_are_1() -> None:
+    """All T1070.004 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1070_004_file_deletion import T1070004FileDeletion
+
+    events = _make_template_call(T1070004FileDeletion)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+def test_t1070_004_triple_file_delete_pattern() -> None:
+    """Validate the triple file-deletion indicator-removal behavioral signature.
+
+    Verifies:
+    - Events 3, 5, 6 (index 2, 4, 5) are FILE_DELETE operations.
+    - Event 3 deletes malware.exe (primary artifact).
+    - Event 5 deletes attack_log.txt (log artifact).
+    - Event 6 deletes cred_dump.dmp (cross-TTP T1003.001 artifact name, see docstring).
+    - Event 7 (index 6) is NET_CONNECT (cleanup completion signal to C2).
+    The triple FILE_DELETE pattern is the key behavioral signature of T1070.004.
+    """
+    from loghetero.data.attack_templates.t1070_004_file_deletion import T1070004FileDeletion
+    from loghetero.data.parsers.base import EdgeType, NodeType
+
+    iid = 12
+    template = T1070004FileDeletion()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    cleanup_tool = f"atk_{iid}_cleanup_tool.exe"
+    malware = f"atk_{iid}_malware.exe"
+    attack_log = f"atk_{iid}_attack_log.txt"
+    cred_dump = f"atk_{iid}_cred_dump.dmp"
+
+    # Event 3 (index 2): FILE_DELETE malware.exe
+    ev_del_malware = events[2]
+    assert ev_del_malware.operation == EdgeType.FILE_DELETE.value
+    assert ev_del_malware.subject == cleanup_tool
+    assert ev_del_malware.obj == malware
+    assert ev_del_malware.obj_type == NodeType.file
+
+    # Event 5 (index 4): FILE_DELETE attack_log.txt
+    ev_del_log = events[4]
+    assert ev_del_log.operation == EdgeType.FILE_DELETE.value
+    assert ev_del_log.subject == cleanup_tool
+    assert ev_del_log.obj == attack_log
+    assert ev_del_log.obj_type == NodeType.file
+
+    # Event 6 (index 5): FILE_DELETE cred_dump.dmp (cross-TTP T1003.001 artifact name)
+    ev_del_cred = events[5]
+    assert ev_del_cred.operation == EdgeType.FILE_DELETE.value
+    assert ev_del_cred.subject == cleanup_tool
+    assert ev_del_cred.obj == cred_dump
+    assert (
+        "cred_dump" in ev_del_cred.obj
+    ), "Event 6 must reference cred_dump artifact for T1003.001 cross-TTP coherence"
+
+    # Event 7 (index 6): NET_CONNECT (C2 completion signal)
+    ev_net = events[6]
+    assert ev_net.operation == EdgeType.NET_CONNECT.value
+    assert ev_net.subject == cleanup_tool
+    assert ev_net.obj_type == NodeType.network
+
+
+# ---------------------------------------------------------------------------
+# T1053.005 Scheduled Task (Phase 5 / Checkpoint 15 Cycle E)
+# ---------------------------------------------------------------------------
+
+
+def test_t1053_005_generates_8_events() -> None:
+    """T1053.005 must generate exactly 8 events."""
+    from loghetero.data.attack_templates.t1053_005_scheduled_task import T1053005ScheduledTask
+
+    events = _make_template_call(T1053005ScheduledTask)
+    assert len(events) == 8, f"Expected 8 events, got {len(events)}"
+
+
+def test_t1053_005_event_types() -> None:
+    """T1053.005 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    Event 3 uses the registry-as-file workaround reused from T1547.001:
+    FILE_WRITE to TaskCache registry path (file node) -- triple
+    (process, FILE_WRITE, file) IS in ALLOWED_EDGE_TRIPLES.
+    """
+    from loghetero.data.attack_templates.t1053_005_scheduled_task import T1053005ScheduledTask
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType
+
+    events = _make_template_call(T1053005ScheduledTask)
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1053.005"
+
+
+def test_t1053_005_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1053_005_scheduled_task import T1053005ScheduledTask
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1053005ScheduledTask)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1053_005_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1053_005_scheduled_task import T1053005ScheduledTask
+
+    events = _make_template_call(T1053005ScheduledTask)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1053_005_timestamps_in_window() -> None:
+    """All T1053.005 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1053_005_scheduled_task import T1053005ScheduledTask
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1053005ScheduledTask()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1053_005_labels_are_1() -> None:
+    """All T1053.005 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1053_005_scheduled_task import T1053005ScheduledTask
+
+    events = _make_template_call(T1053005ScheduledTask)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+def test_t1053_005_taskcache_registry_as_file_workaround() -> None:
+    """Validate the registry-as-file workaround reuse for T1053.005 (T1547.001 pattern).
+
+    Event 3 (index 2) must be FILE_WRITE to a file node whose ID contains the
+    TaskCache registry path. This reuses the registry-as-file workaround from
+    T1547.001 (no new inventory entry). Verifies:
+    - operation == FILE_WRITE
+    - obj_type == NodeType.file
+    - obj contains 'Schedule' or 'TaskCache' (registry path substring)
+    - triple (process, FILE_WRITE, file) IS in ALLOWED_EDGE_TRIPLES
+    """
+    from loghetero.data.attack_templates.t1053_005_scheduled_task import T1053005ScheduledTask
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType, NodeType
+
+    iid = 13
+    template = T1053005ScheduledTask()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    # Event 3 (index 2): FILE_WRITE to TaskCache registry path (file node)
+    ev_reg = events[2]
+    assert ev_reg.operation == EdgeType.FILE_WRITE.value, (
+        f"Event 3 must be FILE_WRITE (registry-as-file workaround, T1547.001 reuse), "
+        f"got {ev_reg.operation!r}"
+    )
+    assert ev_reg.obj_type == NodeType.file, (
+        f"TaskCache registry path must be modeled as file node (registry-as-file workaround), "
+        f"got {ev_reg.obj_type}"
+    )
+    assert "Schedule" in ev_reg.obj or "TaskCache" in ev_reg.obj, (
+        f"Event 3 obj must contain TaskCache/Schedule registry path substring, "
+        f"got {ev_reg.obj!r}"
+    )
+    # Verify the workaround triple IS in ALLOWED_EDGE_TRIPLES (legal, not a violation)
+    workaround_triple = (NodeType.process, EdgeType.FILE_WRITE, NodeType.file)
+    assert (
+        workaround_triple in ALLOWED_EDGE_TRIPLES
+    ), f"Registry-as-file workaround triple {workaround_triple} not in ALLOWED_EDGE_TRIPLES"
+
+    # Event 5 (index 4): PROCESS_CREATE -> payload.exe (task execution)
+    ev_spawn = events[4]
+    assert ev_spawn.operation == EdgeType.PROCESS_CREATE.value
+    assert f"atk_{iid}_payload.exe" in ev_spawn.obj
+    assert ev_spawn.obj_type == NodeType.process
+
+
+# ---------------------------------------------------------------------------
+# T1543.003 Windows Service (Phase 5 / Checkpoint 15 Cycle E)
+# ---------------------------------------------------------------------------
+
+
+def test_t1543_003_generates_7_events() -> None:
+    """T1543.003 must generate exactly 7 events."""
+    from loghetero.data.attack_templates.t1543_003_windows_service import T1543003WindowsService
+
+    events = _make_template_call(T1543003WindowsService)
+    assert len(events) == 7, f"Expected 7 events, got {len(events)}"
+
+
+def test_t1543_003_event_types() -> None:
+    """T1543.003 events must use only allowed schema triples (ALLOWED_EDGE_TRIPLES).
+
+    Event 1 uses USER_PRIV_GRANT (4672) seed -- triple (user, USER_PRIV_GRANT, process)
+    IS in ALLOWED_EDGE_TRIPLES. Event 3 uses registry-as-file workaround reused
+    from T1547.001 -- (process, FILE_WRITE, file) IS in ALLOWED_EDGE_TRIPLES.
+    """
+    from loghetero.data.attack_templates.t1543_003_windows_service import T1543003WindowsService
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType
+
+    events = _make_template_call(T1543003WindowsService)
+    for ev in events:
+        triple = (ev.subject_type, EdgeType(ev.operation), ev.obj_type)
+        assert triple in ALLOWED_EDGE_TRIPLES, f"Disallowed triple {triple} in T1543.003"
+
+
+def test_t1543_003_seed_anchor() -> None:
+    """First event must have subject=seed_user and subject_type=NodeType.user."""
+    from loghetero.data.attack_templates.t1543_003_windows_service import T1543003WindowsService
+    from loghetero.data.parsers.base import NodeType
+
+    events = _make_template_call(T1543003WindowsService)
+    assert events[0].subject == "victim_user"
+    assert events[0].subject_type == NodeType.user
+
+
+def test_t1543_003_attack_nodes_have_atk_prefix() -> None:
+    """All non-seed nodes must start with atk_ prefix."""
+    from loghetero.data.attack_templates.t1543_003_windows_service import T1543003WindowsService
+
+    events = _make_template_call(T1543003WindowsService)
+    for ev in events:
+        if ev.subject != "victim_user":
+            assert ev.subject.startswith("atk_"), f"Subject {ev.subject!r} lacks atk_ prefix"
+        assert ev.obj.startswith("atk_"), f"Object {ev.obj!r} lacks atk_ prefix"
+
+
+def test_t1543_003_timestamps_in_window() -> None:
+    """All T1543.003 event timestamps must lie within [t_start_ns, t_end_ns]."""
+    from loghetero.data.attack_templates.t1543_003_windows_service import T1543003WindowsService
+
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    template = T1543003WindowsService()
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=0,
+    )
+    for ev in events:
+        assert t_start <= ev.timestamp_ns <= t_end, f"Timestamp {ev.timestamp_ns} outside window"
+
+
+def test_t1543_003_labels_are_1() -> None:
+    """All T1543.003 attack events must have label=1 in attributes."""
+    from loghetero.data.attack_templates.t1543_003_windows_service import T1543003WindowsService
+
+    events = _make_template_call(T1543003WindowsService)
+    for ev in events:
+        assert ev.attributes.get("label") == 1
+
+
+def test_t1543_003_priv_grant_seed_and_service_registry_workaround() -> None:
+    """Validate USER_PRIV_GRANT seed + registry-as-file workaround for T1543.003.
+
+    Verifies three behavioral properties:
+    1. Event 1 (index 0): USER_PRIV_GRANT seed (not USER_LOGON). sc.exe requires
+       elevated privileges (SeServiceLogonRight); ATLAS EventID 4672 fires on
+       privileged logon. Triple (user, USER_PRIV_GRANT, process) IS in ALLOWED_EDGE_TRIPLES.
+    2. Event 3 (index 2): FILE_WRITE to Services/MalSvc registry key (file node).
+       Registry-as-file workaround REUSED from T1547.001 (no new inventory entry).
+    3. Event 4 (index 3): PROCESS_CREATE -> malicious_service.exe (SCM service start).
+    """
+    from loghetero.data.attack_templates.t1543_003_windows_service import T1543003WindowsService
+    from loghetero.data.parsers.base import ALLOWED_EDGE_TRIPLES, EdgeType, NodeType
+
+    iid = 14
+    template = T1543003WindowsService()
+    t_start = int(1.5e18)
+    t_end = t_start + int(3.6e12)
+    events = template.generate(
+        seed_subject="victim_user",
+        seed_subject_type="user",
+        t_start_ns=t_start,
+        t_end_ns=t_end,
+        rng=_make_rng(),
+        instance_id=iid,
+    )
+
+    # Property 1: Event 1 (index 0) must use USER_PRIV_GRANT (not USER_LOGON)
+    ev_seed = events[0]
+    assert ev_seed.operation == EdgeType.USER_PRIV_GRANT.value, (
+        f"Event 1 must use USER_PRIV_GRANT (4672 privileged session seed), "
+        f"got {ev_seed.operation!r}. sc.exe requires elevated privileges to install services."
+    )
+    assert (
+        ev_seed.operation != EdgeType.USER_LOGON.value
+    ), "Event 1 must NOT use USER_LOGON; T1543.003 requires privileged session (4672)."
+    assert ev_seed.subject == "victim_user"
+    assert ev_seed.subject_type == NodeType.user
+    assert f"atk_{iid}_sc.exe" in ev_seed.obj
+    # Confirm (user, USER_PRIV_GRANT, process) IS in ALLOWED_EDGE_TRIPLES
+    seed_triple = (NodeType.user, EdgeType.USER_PRIV_GRANT, NodeType.process)
+    assert (
+        seed_triple in ALLOWED_EDGE_TRIPLES
+    ), f"Seed triple {seed_triple} not in ALLOWED_EDGE_TRIPLES"
+
+    # Property 2: Event 3 (index 2) -- registry-as-file workaround (T1547.001 reuse)
+    ev_reg = events[2]
+    assert ev_reg.operation == EdgeType.FILE_WRITE.value, (
+        f"Event 3 must be FILE_WRITE (registry-as-file workaround, T1547.001 reuse), "
+        f"got {ev_reg.operation!r}"
+    )
+    assert (
+        ev_reg.obj_type == NodeType.file
+    ), f"Services registry key must be modeled as file node, got {ev_reg.obj_type}"
+    assert (
+        "Services" in ev_reg.obj or "MalSvc" in ev_reg.obj or "Registry" in ev_reg.obj
+    ), f"Event 3 obj must contain Services/MalSvc/Registry substring, got {ev_reg.obj!r}"
+
+    # Property 3: Event 4 (index 3) -- SCM spawns service binary
+    ev_start = events[3]
+    assert ev_start.operation == EdgeType.PROCESS_CREATE.value
+    assert f"atk_{iid}_sc.exe" in ev_start.subject
+    assert f"atk_{iid}_malicious_service.exe" in ev_start.obj
+    assert ev_start.obj_type == NodeType.process
