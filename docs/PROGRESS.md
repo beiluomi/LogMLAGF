@@ -13,9 +13,10 @@
 
 ## 2. 最新 Checkpoint Commit
 
-- **Hash**：（本 commit Checkpoint 14 Option β 形式闭环；前置 Checkpoint 14 RFC 决议 docs commits 含 `2eb712e` Phase 7 deep injection 训练成本预算提醒 + `241f30f` Checkpoint 13 Option C 三条件落档 + `2c89cb5` Phase 5 hard negative benign admin behaviors 议程；前置 Checkpoint 13 commits 为 `a3eb147` 主体 + `5cba533` review fixes + `71363e9` 收尾；前置 Checkpoint 12 commits 为 `cfa4ec6` 主体 + `78c76ee` review fixes + `8222e50` smoke test + `6f2410f` 收尾）
-- **Message**：`feat(phase4): Checkpoint 14 closure with 5/7 PASS + 2/7 informational null finding (β)`
+- **Hash**：`1b16d25`（Option α 补充诊断 inconclusive 落档；前置 Checkpoint 14 Option β 形式闭环 commit `8204b4a` + RFC 决议 docs commits 含 `2eb712e` Phase 7 deep injection 训练成本预算提醒 + `241f30f` Checkpoint 13 Option C 三条件落档 + `2c89cb5` Phase 5 hard negative benign admin behaviors 议程）
+- **Message**：`test(phase4): Checkpoint 14 supplementary diagnostic (α frozen MLMHead)`
 - **Date**：2026-05-07
+- **Option α status**：**INCONCLUSIVE**——Gate 5 fail（random-init frozen MLMHead → 30k-class 投影无语义锚 → 梯度信号 uniformly random → 50 epoch 下 loss 仅降 64.6% < 90% 阈值，无法 memorize 8 样本）。Gates 3/4 SKIPPED 早退出。Implementer 分析：不是 fusion incapacity 而是 random-head gradient noise pathology。**user 预设的 α PASS / α FAIL 二分外的第三类情形**——需要 user 裁定继续路径：(a) 进 14.5 直接走，α inconclusive 不视为 architectural concern；(b) 先做 α'（pretrained BERT MLM head 加载到 ModifiedMLMHead 再冻结）refine 测试；(c) 其他路径。
 
 ## 3. 累计 Commit 链（按时间顺序，到当前 commit）
 
@@ -62,7 +63,8 @@
 | 39 | `2c89cb5` | docs / Phase 5 待办 | docs(known_issues): add Phase 5 待办 hard negative benign admin behaviors agenda |
 | 40 | `241f30f` | docs / checkpoint 13 Option C | docs(known_issues): Checkpoint 13 Option C 三条件落档（perplexity fast-iter 接受 + Phase 7 proper-scale 复验占位 + 14.5 临界测试 caveat）|
 | 41 | `2eb712e` | docs / Phase 7 deep injection | docs(known_issues): Phase 7 待办 add deep injection 训练成本预算提醒（Checkpoint 14 RFC-1 Option A 触发）|
-| 42 | `<this commit>` | checkpoint 14 closure | feat(phase4): Checkpoint 14 closure with 5/7 PASS + 2/7 informational null finding (β) |
+| 42 | `8204b4a` | checkpoint 14 closure | feat(phase4): Checkpoint 14 closure with 5/7 PASS + 2/7 informational null finding (β) |
+| 43 | `1b16d25` | option α diagnostic | test(phase4): Checkpoint 14 supplementary diagnostic (α frozen MLMHead) |
 
 ## 4. 已生效的决策清单（决策 1–9 + Phase 3 / Phase 4 设计偏离 + 经验启发式校准）
 
