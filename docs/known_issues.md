@@ -725,6 +725,99 @@ Option α（commit `1b16d25`）原始设计使用 random-init frozen ModifiedMLM
 
 **审计 anchor**：本条目记录 14.5 protocol 的 documented limitation，与 14.5 Path B' 数字呈现一同构成完整 caveat 链。
 
+### Phase 4 cross-modal fusion preliminary diagnostic chain - four informational null findings as methodology transparency（2026-05-07，Phase 4 全 null 闭环路径触发）
+
+**触发原因**：Phase 4（双向跨模态融合，创新点 1 第二部分）5/5 sub-checkpoints 形式闭环过程中累计 4 个 informational null finding，user 决议（2026-05-07）选 Phase 4 全 null 闭环路径而非 Option γ 架构修复。这是 Phase 4 整体 paper-grade 叙事的核心 entry，将 4 个 null 整合为统一 methodology transparency 论文 contribution evidence。
+
+**完整四 null finding chain（按 Phase 4 时间序）**：
+
+| # | Checkpoint | 任务结构 | 关键数字 | 根因诊断 |
+|---|---|---|---|---|
+| 1 | C11.2-γ-1 (2026-05-06) | structure-determined link prediction + random edge masking + structural negative sampling 1:1 | 4 档 BERT 集成 (random Gaussian / [CLS] entity-identifier / β TOP_K=5 truncated / β TOP_K=2 in-spec) AUC mean 0.811-0.815 std 0.007-0.016 无 statistical 差异 | random edge masking + structural negatives 让图拓扑信号完全决定 link prediction，BERT 语义特征通过 input-feature 通道无 lift |
+| 2 | C14 Gates 3/4 (2026-05-07) | 8-sample MLM overfit + frozen BERT + trainable HTGN/CrossModalAttention/MLMHead | trained-state Gate 3 cross-attention normalized entropy 6/8 over upper bound 0.95 + Gate 4 modality dropout cos-sim mean=p10=p50=p90=1.0000 全 percentile | MLMHead 单独 capacity 充分让 fusion 路径成 redundant，cross-attention 学到 ~0 contribution（uniform attention 弱聚合） |
+| 3 | α' Category 1 (2026-05-07) | frozen BERT + frozen pretrained-MLMHead pressure isolation + trainable HTGN/CrossModalAttention only | epoch1 0.6532 → epoch50 0.1197 reduction 81.7% < 90% 阈值 | 即使消除 random-head gradient noise confound（α 30x 改善证），HTGN+CrossModalAttention 在 frozen-head pressure 下仍无法 fully converge MLM loss |
+| 4 | C14.5 Path B' Result B audit-PASS (2026-05-07) | fully-anonymized 5 TTP anomaly probe (atk_N_ prefix two-phase normalization 23 node ID forms 全 collapse 到 4 canonical token 零 oversight) + within-TTP 80/20 holdout + 4 seed | HTGN-only F1 0.2143 / BERT-only 0.9697 / Fusion 0.8699 → fusion - BERT-only **-0.0998** | fusion cross-attention 在 fully-anonymized fair conditions 下 actively interfere BERT-only 任务解决能力约 10pp，cross-attention 不只 ~0 contribution 是 active negative |
+
+**四 null finding 的共同特征**：
+
+1. **任务结构都不是 cross-modal fusion 设计的目标使用场景**：link prediction 是 structure-determined task；MLM overfit 是 8-sample 单样本记忆任务；α' 是 frozen pressure isolation 没有 task supervision 多样性；14.5 anomaly probe 是 BERT 单独 0.97 F1 已 saturate 的 lexical-rich 简化任务
+2. **Cross-attention 输出 content-quality 问题（零或错），不是 amplitude 不够**：第 2/4 null 显示 trained-state cross-attention 学到 ~0 contribution，第 4 null 显示 cross-attention 输出 actively interfere。这两种现象 λ scaling factor 修不了——λ 增加幅度只会让零仍是零或让错变得更错
+3. **Fusion 真实目标是 Phase 7 大规模联合预训练 + InfoNCE 跨模态对比损失 + Phase 8 真实异常检测**：InfoNCE 对比损失天然要求 fusion 提供 graph-discriminative 信号否则正负样本对无法区分，这是 fundamentally different pressure structure
+4. **Phase 4 preliminary tests 全 null 是合理 prior 不是 fusion 不工作的最终判定**：真实场景在 Phase 7-8
+
+**论文 Methods 章节叙事框架**：
+
+> We instrumented our cross-modal fusion architecture with four preliminary
+> diagnostic protocols at progressively stricter task-pressure structures
+> (Phase 4 of our pipeline). Each protocol was designed to surface fusion
+> engagement under a specific test geometry: structure-determined link
+> prediction, small-batch masked-language-modeling overfit, frozen-head
+> pressure isolation, and lexical-anonymized synthetic anomaly classification.
+> All four protocols returned informational null findings: cross-modal
+> attention either contributed near-zero output or actively interfered with
+> the text-modality solo baseline.
+>
+> Diagnostic analysis traced these nulls to a common root: the four task
+> structures used here are not the design target use cases of cross-modal
+> fusion. Fusion is architecturally specified for joint pretraining with
+> graph-text contrastive (InfoNCE) loss (Phase 7 of our pipeline) and for
+> downstream anomaly detection on real provenance graphs (Phase 8). InfoNCE
+> contrastive loss natively requires fusion to provide graph-discriminative
+> signal because positive and negative example pairs cannot be separated
+> otherwise — a fundamentally different pressure structure than supervised
+> single-task losses on small data. The Phase 4 nulls thus form a reasonable
+> prior on what fusion does NOT do under preliminary test geometries, not a
+> final judgment of fusion mechanism viability.
+>
+> The diagnostic transparency we provide — four protocol designs each with
+> documented task structure, observed null, root-cause analysis, and
+> non-extrapolation boundary — is itself a methodology contribution. Cf.
+> ViLBERT / GreaseLM / Patton and other cross-modal-fusion prior work
+> typically report only the trained-state final metrics; we additionally
+> report the diagnostic chain that maps where fusion does and does not
+> engage. This is the engineering rigor analogue to the "ablation study"
+> tradition: instead of removing components and measuring degradation, we
+> retain the full architecture and probe its engagement under varying
+> task pressures.
+
+**Phase 7-8 严格 fusion engagement gates**（与本条目配套形成诚实性契约 anchor）：
+
+- Phase 7 fusion engagement small-scale gate（详见 Phase 7 待办::"fusion engagement small-scale gate before full pretraining"）：1 epoch on 10% data subset mini pretrain 检查 cross-attention output norm + attention entropy + fusion vs BERT-only contrast loss delta
+- Phase 8 strict fusion ablation（详见 Phase 8 待办::"strict fusion ablation in finetune evaluation"）：HTGN-only / BERT-only / fusion 三 config 完整异常检测评测，fusion 必须显著超 max(HTGN-only, BERT-only) F1 + 0.03 加 4 seed paired t-test p < 0.05
+
+**审计 anchor**：本条目是 Phase 4 整体 paper-grade narrative 的核心 entry，与 4 个 null finding 各自的 audit anchor + Phase 7-8 严格 gate entries + 诚实性契约 entry 一同构成完整论文 Methods 章节"Cross-modal fusion verification protocol design lessons"子节素材链。Phase 12 论文写作时本条目是 4.x Cross-modal fusion 段的最高层 narrative 索引。
+
+### Cross-modal fusion validation honesty contract for Phase 7-8 failure cases（2026-05-07，Phase 4 全 null 闭环 + Option γ 否决决议触发）
+
+**触发原因**：Phase 4 全 null 闭环路径下 fusion validation 推到 Phase 7-8 严格 gate。Phase 7 mini pretrain 或 Phase 8 strict ablation 任一 fail 时必须有预先约定的处理路径，避免到 Phase 7-8 fail 才临时讨论是否 pivot 论文造成决策不 disciplined。
+
+**Phase 7-8 也 fail 时的两条处理路径（pre-commitment）**：
+
+**路径 A：Minor 架构调整（4-6 周工时干预）**
+
+- 干预方向：attention mask 放宽 + cross-attention 容量增强（更多 head / 更宽 attn_dim / 更多 fusion point）+ HTGN end-to-end 训练（不冻 HTGN backbone）+ 替换为 simpler concat fusion 等
+- 触发条件：Phase 7 mini pretrain fail 但 cross-attention output norm 不为 0（不是完全 bypass，是 attention pattern 不对），或 Phase 8 strict ablation fusion ≈ max(HTGN-only, BERT-only) 但单 config metric 都不弱
+- 决策时机：Phase 7 mini pretrain fail 时立即 RFC，Phase 8 strict ablation fail 时如已经做过 minor 架构调整路径触发路径 B
+- 工时预算：4-6 周（架构修改 + 重 Phase 12 + Phase 14 + 14.5 复跑 + Phase 7 重启动 + 数字分析）
+
+**路径 B：Major 论文 pivot（放弃创新点一双向跨模态融合 claim）**
+
+- 论文重心彻底转向创新点二即 RAPA-GTCL 攻击模板增强 + 图文对比预训练（创新点二独立于 fusion 状态在 Phase 7-8 fail 时仍是有效 contribution）
+- 论文 title 与 contribution claim 相应调整：原"首个把 HTGN 与 LM 在预训练阶段做双向跨模态融合的框架" → "首个把 MITRE ATT&CK 攻击模板作为图增强样本与图文对比目标在预训练阶段联合训练的框架"（创新点二原文），fusion 部分降级为 ablation negative result 章节（"我们尝试 cross-modal fusion 但发现在 our task pressure structures 下未自发 engage，主创新转向 RAPA-GTCL"）
+- 触发条件：Phase 7 mini pretrain fail 显示 fusion 完全 bypass（cross-attention output norm 接近 0 持续），或路径 A minor 架构调整后仍 fail，或 Phase 8 strict ablation fusion 显著低于 max(HTGN-only, BERT-only)
+- 决策时机：架构调整路径已尝试 fail 后立即 pivot，避免投入更多工时
+- 工时预算：3-4 周（论文 outline 重 frame + Methods 章节 fusion 部分重写为 ablation + Discussion 调整 + cite 调整）
+
+**诚实性契约的核心约定**：
+
+1. **Phase 7-8 任一 gate fail 不允许"再做一轮诊断"**：四轮 Phase 4 诊断已充分，Phase 7-8 严格 gate fail 时直接进入路径 A 或 B 二选一
+2. **路径 A 限定 4-6 周**：超时未 close 必须 pivot 路径 B
+3. **路径 A 与路径 B 的选择基于具体 fail 模式**：完全 bypass → 直接路径 B；部分 engagement 但不充分 → 路径 A 试一次再判
+4. **路径 B 不是"失败"是"诚实"**：审稿人会 appreciate 作者诚实承认 fusion 不工作并 pivot 而非强行 spin null finding 为正向 contribution
+5. **本契约必须在 Phase 12 论文写作前 reference**：避免 fusion fail 时被忽略或淡化处理（"再多跑几个 epoch 应该就好了"这种不 disciplined 的延误）
+
+**审计 anchor**：本条目是 Phase 4 全 null 闭环决议（2026-05-07，user 否决 Option γ）的诚实性契约核心，与 Phase 4 four-null methodology chain entry + Phase 7 fusion engagement gate + Phase 8 strict ablation entries 一同构成完整下游 fusion validation 流水线 + 失败处理 commitment。Phase 7-8 launch spec 落地时本契约作为 hard constraint 输入。
+
 ## Phase 7 待办
 
 ### Gradient clipping 在 Phase 7 联合预训练 launch spec 必须显式启用（2026-05-06，Checkpoint 14 Gate 2 实测 grad_norm 2e14 触发）
@@ -934,6 +1027,35 @@ trainer = pl.Trainer(..., gradient_clip_val=5.0, gradient_clip_algorithm="norm")
 
 **为何不在 Checkpoint 13 内扩 budget 跑 proper-scale**：Phase 4 launch spec 把 Phase 4 框定为 integration phase，AUC-style 单点验证关卡撤销，深层验证留 Phase 7-8 anomaly detection 阶段。当下扩 budget 重跑全量 74k events 拖延 Checkpoint 14 / 14.5 一到两天换取并非关键决策点 metric 的边际额外置信度，ROI 偏低。Phase 7 联合预训练阶段必然要在该数据上跑大规模训练，proper-scale perplexity 复验天然搭车 Phase 7 训练流程不增加额外工时。
 
+### Fusion engagement small-scale gate before full pretraining（2026-05-07，Phase 4 全 null 闭环 + Option γ 否决决议触发）
+
+**触发原因**：Phase 4 全 null 闭环路径下 fusion validation 推到 Phase 7-8 严格 gate。Phase 7 必须有 small-scale gate 在启动 full pretraining 前 sanity check fusion 是否在大规模联合预训练 + InfoNCE 跨模态对比损失结构下 engage，避免 6-8 周 full pretrain 跑完才发现 fusion 完全 bypass 浪费工时。
+
+**Phase 7 启动前必须跑的 mini pretrain 协议**：
+
+1. **数据规模**：取 M3_h2 first 1.0h window 数据 10% subset（约 7,400 events）作为 mini training set
+2. **训练配置**：1 epoch full pass + 完整 LogHetero joint pretrain objective（HTGN forward + BERT forward + 4 × CrossModalAttention deep injection + ModifiedMLM head + 占位 GTCL InfoNCE 头 with 占位 RAPA 模板若 Phase 5 已完成或 RAPA-stub 若 Phase 5 未完成）
+3. **测量 fusion engagement metrics**（mini pretrain 完成后 immediate 测量，不等 full pretrain）：
+   - **Cross-attention output norm**：每个 fusion point 的 `tg_out_proj(tg_ctx)` L2 norm 与 BERT residual L2 norm 比例。健康指标：> 0.05（即 fusion 残差至少占 BERT residual 的 5%）。如 < 0.01 标记为 fusion 完全 bypass
+   - **Attention entropy**：每个 (fusion_point, direction) 对的 normalized entropy H(attention)/log(n_keys)。健康范围 [0.3, 0.95]（与 Checkpoint 14 Gate 3 同阈值）
+   - **Fusion vs BERT-only contrast loss delta**：在同 mini pretrain 数据上同时跑 fusion config 与 BERT-only config 的 InfoNCE contrast loss，比较 delta。健康指标：fusion contrast loss < BERT-only contrast loss × 0.95（即 fusion 让 contrastive 任务 measurably easier）
+
+**Pass / fail 判定**：
+
+- **Pass**：3 个 metrics 全部 in healthy range → 启动 Phase 7 full pretraining
+- **Fail any**：暂停 Phase 7 full pretrain → 触发架构级 RFC 按诚实性契约（详见 Phase 12 论文素材::"Cross-modal fusion validation honesty contract for Phase 7-8 failure cases"）路径 A 或 B 处理
+
+**Phase 4 双 informational null pattern 的下游 implication**：
+
+- C14 Gates 3/4（trained-state cross-attention output ~0）+ 14.5 Path B' Result B（fusion underperform BERT-only -0.0998）已显示 fusion 在 supervised single-task 结构下不 engage
+- Phase 7 mini pretrain 是首次在 InfoNCE 对比损失结构下测试 fusion engagement——任务 pressure 本质不同
+- **如 Phase 7 mini pretrain 仍 fail**：基本确认 fusion 在 LogHetero 当前架构下 fundamentally 不 engage，路径 B major 论文 pivot 应直接触发不浪费 4-6 周做路径 A minor 架构调整
+- **如 Phase 7 mini pretrain pass**：fusion 在 InfoNCE 对比损失下确实 engage，Phase 4 四 null 是任务结构 mismatch 的诚实证据，full pretraining 可推进
+
+**实施完成后回头闭环标注**：本条目末尾追加 "Phase 7 mini pretrain 完成日期 + commit hash + 3 个 metrics 实测数字 + pass/fail 判定 + 后续路径决策（full pretraining 启动 / 架构 RFC / 论文 pivot）"。
+
+**审计 anchor**：本条目是 Phase 4 全 null 闭环 + Option γ 否决决议（2026-05-07）的下游 fusion validation 严格 gate anchor，与 Phase 12 论文素材::"four-null methodology chain" + "honesty contract" + Phase 8 待办::"strict fusion ablation" 一同构成完整 Phase 7-8 fusion validation 流水线。Phase 7 launch spec 启动时本条目作为 hard constraint 输入。
+
 ## Phase 8 待办
 
 - **`AtlasGroundTruthLabelLoader` 实现**（2026-05-05 标记，由 Checkpoint 5 引发）。当前 `src/loghetero/data/datamodule.py::benign_only_label_loader` 是 Phase 1.6 stub（所有 event 返回 0），Phase 8 finetune_anomaly mode 需要真实标签。实施步骤：
@@ -941,6 +1063,39 @@ trainer = pl.Trainer(..., gradient_clip_val=5.0, gradient_clip_algorithm="norm")
   2. 实现 `src/loghetero/data/label_loaders.py::AtlasGroundTruthLabelLoader`：构造时加载所有 scenario 的攻击实体集，`__call__(event)` 返回 1 if `event.subject ∈ entities or event.obj ∈ entities` else 0。
   3. DataModule 构造时通过 `label_loader=AtlasGroundTruthLabelLoader(scenarios=[...])` 替换 stub。
   4. 配套测试：fixture 含已知攻击实体 + 标签验证；fold stats 重新跑确认 attack count 列从 0 变成实际数字。
+
+### Strict fusion ablation in finetune evaluation（2026-05-07，Phase 4 全 null 闭环 + Option γ 否决决议触发）
+
+**触发原因**：Phase 4 全 null 闭环路径下 fusion validation 推到 Phase 7-8 严格 gate。Phase 8 finetune anomaly detection 是 fusion mechanism 的最终判定关卡，必须有严格 ablation 协议确认 fusion 是否在真实 anomaly 任务下 engage 超过 single-modality baselines。
+
+**Phase 8 finetune 阶段必须跑的 strict fusion ablation 协议**：
+
+1. **三 config 完整异常检测评测**（在同一 finetune 协议下并列跑）：
+   - **HTGN-only**：Phase 7 pretrained HTGN backbone + 异常分类 head（无 BERT，无 cross-attention）
+   - **BERT-only**：Phase 7 pretrained BERT backbone + 异常分类 head（无 HTGN，无 cross-attention）
+   - **Fusion**：Phase 7 pretrained Phase4Model 完整框架（BERT + HTGN + 4 × CrossModalAttention deep injection）+ 异常分类 head
+2. **数据**：完整 Phase 8 finetune dataset（详见 Phase 8 待办::"AtlasGroundTruthLabelLoader 实现"）含 ATLAS 全 10 scenarios 真实攻击实体标签
+3. **评测**：完整 anomaly detection metrics 含 F1 / Precision / Recall / AUC / 4 seed 配对
+4. **配置**：所有 3 config 同样 finetune lr / epoch / scheduler / random seed 协议确保 ablation fair
+
+**Pass / fail 判定（双条件硬阈值，比 Checkpoint 14.5 fast-iter 双条件更严）**：
+
+- **Condition 1**：fusion mean F1 - max(HTGN-only mean F1, BERT-only mean F1) ≥ **0.03**（fusion 显著超 single-modality baselines 至少 3pp，匹配 Phase 4 launch spec 原 fusion-vs-HTGN-only +0.03 lift 阈值但 ceiling 改为更难的 max(HTGN-only, BERT-only)）
+- **Condition 2**：4 seed paired t-test p < **0.05**（更严的 statistical significance 比 14.5 fast-iter 用的 p < 0.1）
+- **Both must hold**：单 condition 满足不算 fusion engagement 在 Phase 8 验证通过
+
+**Pass / fail 后续路径**：
+
+- **Pass**：fusion engagement 在 Phase 8 验证通过 → 论文 Methods 章节有完整 fusion claim 实证 evidence chain → v1.0-paper tag 路径
+- **Fail any**：触发架构级 RFC 按诚实性契约（详见 Phase 12 论文素材::"Cross-modal fusion validation honesty contract for Phase 7-8 failure cases"）路径 A（minor 架构调整 4-6 周）或路径 B（major 论文 pivot 放弃 fusion claim 转向 RAPA-GTCL）处理
+
+**与 Checkpoint 14.5 Path B' fast-iter 数字的对照预设**：
+
+Checkpoint 14.5 Path B' final fusion - BERT-only = -0.0998（fast-iter synthetic 5 TTP probe）。Phase 8 真实 ATLAS 全 scenario anomaly detection finetune 任务 pressure 与 14.5 不同（真实攻击 entity 标签 + 完整 finetune protocol + 跨 scenario 多样性）。如 Phase 8 fusion 仍 underperform BERT-only 单 modality（Condition 1 fail），与 14.5 Result B 形成跨任务一致 null pattern → 路径 B major 论文 pivot 高优先级触发。如 Phase 8 fusion ≥ BERT-only 但不达 +0.03 lift（Condition 1 fail 但符号反转），路径 A minor 架构调整可尝试。
+
+**实施完成后回头闭环标注**：本条目末尾追加 "Phase 8 strict fusion ablation 完成日期 + commit hash + 3 config F1/AUC 数字 + Condition 1/2 判定 + 后续路径决策（v1.0-paper / 架构调整 / 论文 pivot）"。
+
+**审计 anchor**：本条目是 Phase 4 全 null 闭环 + Option γ 否决决议（2026-05-07）的下游 fusion validation 严格 gate anchor，与 Phase 7 待办::"Fusion engagement small-scale gate" + Phase 12 论文素材::"four-null methodology chain" + "honesty contract" 一同构成完整 Phase 7-8 fusion validation 流水线。Phase 8 launch spec 启动时本条目作为 hard constraint 输入。
 
 ## Phase 11 消融扩展
 
