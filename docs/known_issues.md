@@ -329,6 +329,24 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 **审计 anchor**：本条目是 GPT 反思（2026-05-06）的 audit trail 之一，user 在 Checkpoint 13 收尾时提出 Phase 5 启动前预读议程，未来 Phase 5 launch spec 落地时本条目作为模板设计的硬性要求清单。Phase 5 commit message 与 module docstring 必须 reference 本条目作为 false-separability 防御设计的设计依据。
 
+### ALLOWED_EDGE_TRIPLES schema 扩展议程：registry 与 process-handle 边类型（2026-05-07，Checkpoint 14.5 RFC-14.5-1 触发）
+
+**触发原因**：Phase 4 / Checkpoint 14.5 RFC-14.5-1 决议（2026-05-07，user 拍板）中两个 TTP 模板的实施暴露了 `ALLOWED_EDGE_TRIPLES` schema 当前缺失的边类型：
+
+1. **T1547.001 Registry Run Keys**：`EdgeType` 当前不含 registry 边类型，Checkpoint 14.5 中**借用** `FILE_WRITE` 到 `\Registry\Machine\Software\Microsoft\Windows\CurrentVersion\Run` 形如 Windows kernel-style notation 的 file node 路径作为工程妥协。
+2. **T1003.001 LSASS Memory**：`HANDLE_REQUEST` 当前是 `(process, HANDLE_REQUEST, file)` 边类型不含 process-as-file-like-handle 直接边类型，Checkpoint 14.5 中**借用** lsass.exe 作 file node 通过 HANDLE_REQUEST 访问，符合 EDR 工具实际建模习惯（监控工具一般也确实把 lsass handle 当 file-like object 抓）。
+
+这两个工程妥协在 Checkpoint 14.5 5 个 TTP 模板 fast-iter 规模（每 TTP 100 events）下足够使用，但 Phase 5 RAPA 完整 20 TTP 模板实施时会触及更广泛 ATT&CK technique 集合，可能暴露更多 schema 缺失（如 service 边类型、scheduled task 边类型、WMI 边类型等），届时统一处理。
+
+**Phase 5 启动时必须 cover 的扩展议程**：
+
+1. **审计 Checkpoint 14.5 5 TTP 模板的 schema 妥协实施情况**：读 `src/loghetero/data/attack_templates/` 5 个 TTP 模块的 docstring 中的 schema workaround rationale 段落，整理出工程妥协的具体边类型借用列表。
+2. **Phase 5 完整 20 TTP 设计阶段**：每个新 TTP 在设计时显式判断是否触及当前 `ALLOWED_EDGE_TRIPLES` 不支持的边类型。如触及，**优先尝试妥协**（借用语义最近的现有边类型，docstring 说明 rationale）；**仅在妥协会导致建模严重失真时才扩 schema**。
+3. **如需扩 ALLOWED_EDGE_TRIPLES**：Phase 5 需要单独 commit `feat(parsers): Phase 5 ALLOWED_EDGE_TRIPLES extension for RAPA TTP coverage` 集中处理所有新增边类型与 EdgeType enum 项，避免散落多个 commit 中。同步更新 HTGN edge_type one-hot 维度（当前 29 → 新数字），更新 `loghetero.models.encoders.time2vec` 测试 `test_edge_type_one_hot_uses_29_dim` 锁定新值，符合 `经验启发式校准记录::Spec 与代码常数同步纪律` 范式。
+4. **Phase 12 论文 Methods 章节素材**：Phase 5 实施时把 schema 妥协 vs 扩展的决策记录作为 "我们如何在工程层面平衡 schema 表达力与实施成本" 的 reproducibility 子节素材。审稿人会 appreciate 看到具体妥协决策的透明 audit trail。
+
+**审计 anchor**：本条目是 Checkpoint 14.5 RFC-14.5-1 决议（2026-05-07，user 拍板"接受 implementer 提议事件序列 + T1547.001 与 T1003.001 工程妥协 + docstring rationale 落档"）的 audit trail。Phase 5 启动时与 hard negative benign admin behaviors 议程一同作为 RAPA 模板设计阶段的 design constraint 输入。
+
 ## Phase 12 论文素材
 
 ### Phase 3 sanity AUC 演进数字（2026-05-06，Checkpoint 10 Option A conditional pass 对应 paper 措辞预定）
