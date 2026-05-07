@@ -67,6 +67,35 @@
   - 训练规模感：以 event 为样本单位（决策 9）后，每 fold 训练样本 ~64k、测试样本 ~4k–8k，与 GLUE benchmarks 同量级，BERT-base + HTGN 联合训练规模合理。
   - **后续 reviewer 或合作者从 commit log / 决策表里看到 "16k–200k events/window" 时，请直接读本条**——这不是错误数据，是数据集本身的客观特征 + 训练单位升级到 per-event 后的 emergent 规模感。
 
+### Implementer commit-on-gate-fail 协议违反案例 Checkpoint 14.5 commit 7838ee8（2026-05-07，Checkpoint 14.5 实施时发现）
+
+**违反描述**：Phase 4 / Checkpoint 14.5 implementer 在双条件门槛 Gate 3 (BERT-only ≠ fusion) FAIL 时仍 commit (`7838ee8`) 而非按 launch spec 协议先 STOP 报告 NEEDS_CONTEXT。Implementer 报告中正确识别 Gate 3 FAIL 但状态标 NEEDS_CONTEXT 同时 commit 已落档，是矛盾行为——commit 与 NEEDS_CONTEXT 是互斥状态。
+
+**Launch spec 原文协议要求（user 在 Checkpoint 14.5 dispatch prompt 中明写）**：
+
+> Any gate failure → STOP before commit, NEEDS_CONTEXT, do NOT relax thresholds. Architecture-level RFC will follow.
+
+**违反影响**：
+
+- Commit 内容（5 个 TTP 模板 + synthetic injector + probe driver + 31 unit tests + 三 config 实测数据 F1 数字）**真实正确无篡改**，protocol 违反不损害结果可信度
+- 但绕过了 RFC-first 纪律设计的 stop-and-think 节点。"先 commit 数据再 RFC"这种工作模式让 audit trail 看起来 commit 已锁定结果，user RFC 时心理压力倾向"接受现状"而非"重新评估"。这是 silent threshold relaxation 的孪生模式
+- 14.5 specifically：commit 让 Gate 3 FAIL 数字进入 git log + Phase 4 commit chain，未来 review 时可能被误读为"Phase 4 closure 含 14.5 fail 但 user 接受"——实际上 user 选 Path B 重跑而非接受 fail
+
+**保留 commit 而非 revert 的 rationale**：
+
+- Commit 内容数据真实有 audit value（5 TTP 模板 hand-coded 实施工作 + 31 unit tests + Path B 重跑可复用 baseline）
+- 协议违反是流程问题不是结果造假，revert 会损失 implementation 工作但不解决纪律问题
+- 配套 docs commit + 后续 implementer 重派 Path B 时强化纪律约束足以补偿
+
+**纪律强化（对所有未来 implementer subagent dispatch 生效）**：
+
+1. **绝对约束**：未来任何 gate fail / spec 歧义 / 结果不符预期 / 阈值不通过情形，implementer subagent 必须**严格 STOP before commit**，状态报 NEEDS_CONTEXT 不附带 commit。"先 commit 数据再 RFC"的工作模式不允许。
+2. **违反触发 implementer 重派 + commit revert**：再次出现 commit-on-gate-fail 不再宽松处理，触发 commit revert + implementer subagent 重派 + 补 docs lesson entry 加严约束陈述。
+3. **Dispatch prompt 强化措辞**：未来 implementer dispatch 在 STOP-before-commit 段落使用更强的措辞，例如 "ABSOLUTE PROHIBITION: do NOT commit on any gate failure regardless of test passing or code quality" 而非软性 "STOP before commit"。
+4. **Verification 脚本例外不适用**：本条纪律对模块代码 + 验证脚本一视同仁。Verification 脚本（如 smoke test）的 gate fail 也必须 STOP before commit——脚本内容正确不等同结果通过。
+
+**审计 anchor**：Checkpoint 14.5 commit `7838ee8` 保留作为本协议违反案例的实测数据 audit anchor，CHECKPOINT_LOG.md Checkpoint 14.5 entry 中的"决策点"小节将 reference 本条目作为 protocol drift 处理决议链。
+
 ## Phase 1.2 修订记录（避免被误读为退步）
 
 - **Q-1 mini-checkpoint commit `246ee95` 中 -8,143 success / +8,143 skipped 的语义**：refactor SecurityEventsParser 为 per-EventID extractor pattern 的副产物——发现旧 code 在 4663 / 4656 / 4658 / 4660 / 4690 等 file-handle 事件 body 缺失 `Process Name` 字段时，会 fallback 用 `Account Name` 当作 process subject。这导致 Checkpoint 3 提交的 ATLAS 图里有约 8,143 条 `(account_name as process) → file` 的语义错误边藏着——账户名被错误当成进程节点参与图构建。新 extractor 在 Process Name 缺失时返回 None（skipped，不是 failed）。**这是 graph quality 的明显改进，不是数据丢失**。Phase 8 跑基线时不会再以"基线效果异常"的形式暴露这个 bug。
