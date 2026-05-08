@@ -358,6 +358,56 @@ Phase 3 Checkpoint 10 Task B 在无 BERT 特征条件下达 AUC 0.8144 ± 0.0068
 
 **审计 anchor**：本条目是 GPT 反思（2026-05-06）的 audit trail 之一，user 在 Checkpoint 13 收尾时提出 Phase 5 启动前预读议程，未来 Phase 5 launch spec 落地时本条目作为模板设计的硬性要求清单。Phase 5 commit message 与 module docstring 必须 reference 本条目作为 false-separability 防御设计的设计依据。
 
+### Checkpoint 16 hard negative coverage 6 vs 8 categories cross-reference table 议程（Tightening 1）
+（2026-05-08，post Cycle F + Checkpoint 15 closure verify-only dispatch finding）
+
+**触发原因**：Cycle F + Checkpoint 15 闭环 commit `1094df1` 后 verify-only dispatch 暴露 Tightening 1 即 Checkpoint 15 RFC 期间 implementer 的 hard negative coverage assessment 提出 8 类 implementer-recommended 自然分组，与 GPT critique 锁定的 6 类 hard negative benign admin behaviors（见同节"20 TTP 模板设计必须含 6 类 hard negative benign admin behaviors" entry）不直接对应，需要 Checkpoint 16 launch 时做 explicit cross-reference table 验证 8 类是否完整覆盖 6 类。8 类来源在 Checkpoint 15 RFC 期间未落 known_issues.md 仅在会话窗口讨论，verify-only dispatch 后 Path B 处理补齐到本独立 entry。
+
+**8 类 implementer-recommended 自然分组**（Checkpoint 15 RFC 期间 implementer hard negative coverage assessment 提出）：
+
+1. Office/Email Normal
+2. Web Server CGI
+3. 合法 Auth
+4. Admin Tool 执行
+5. Certutil LOLBin
+6. FS 操作
+7. 软件驱动安装
+8. 合法 RDP
+
+**Checkpoint 16 launch 硬要求**：
+
+1. 必须做 explicit 6 vs 8 categories cross-reference table 加表格落到 docs（建议 `docs/checkpoint_16_hard_negative_design.md` 或同等位置）加测试不只是会话窗口讨论。
+2. 关键检查点即验证 vulnerability scanner 加备份程序大量读文件这两类是否被 8 类完整覆盖加是否需要扩展第 9 / 第 10 类。
+3. Cross-reference table 由 implementer 在 Checkpoint 16 launch 期间设计实施加 spec compliance reviewer 加 code quality reviewer 验证完整性。
+4. 如果 cross-reference 暴露 6 类中任一类未被 8 类覆盖加需要扩展类别这种情况触发 Checkpoint 16 RFC 不擅自决定。
+
+**与已落 6 类 entry 关系**：本 entry 是同节"20 TTP 模板设计必须含 6 类 hard negative benign admin behaviors" entry 的 Checkpoint 16 launch 时 implementation tightening 不替代父 entry 的 Phase 5 模板设计硬性要求 4 条。
+
+**Cross-reference**：Cycle F + Checkpoint 15 closure commit `1094df1` + verify-only dispatch report (2026-05-08)。
+
+### T1486 ransomware-mimicry hard negative pair 单独 lexical-blind sanity check 协议（Tightening 2）
+（2026-05-08，post Cycle F + Checkpoint 15 closure verify-only dispatch finding）
+
+**触发原因**：Phase 4 Checkpoint 14.5 lessons 即 fully-anonymized 5 TTP fusion underperform BERT-only -0.0998 暴露 BERT-only 通过合法 operation-type co-occurrence signal 已 saturate 0.97 F1，加 GPT critique 综合后锁定 T1486 与对应 ransomware-mimicry hard negative pair 单独 lexical-blind sanity check 协议不只在整体 hard negative library 层面做。Cycle F 实施时三处 anchor 即 t1486 模块 docstring 加类 docstring 加 commit message body 已落档加 CHECKPOINT_LOG.md Placeholder notes 列表也落档但 known_issues.md::Phase 5 待办子节未独立成 entry，verify-only dispatch 后 Path B 处理补齐到本独立 entry。
+
+**协议三要素**：
+
+1. anonymize-then-classify 处理在单独 T1486 加对应 ransomware-mimicry pair 上做不混合其他 hard negative。
+2. 期望 BERT-only F1 显著降级到 < 0.6 即 anonymize 移除 lexical shortcut 后 BERT-only 不能仅靠 file 加密 lexical pattern 区分攻击与合法磁盘加密软件批量加密用户文件。
+3. 这条 sanity check 不能在整体 hard negative library 层面做必须做单独 pair 因为整体 library 包含其他类的 hard negative 会稀释 lexical-blindness 测试压力。
+
+**防御性 reasoning**：这条 sanity gate 防止 BERT-only baseline 在 Phase 8 strict fusion ablation 时未充分压力测试导致 fusion lift 假阴性即 fusion 实际有效但 BERT-only 因为 lexical shortcut 已 saturate 让 fusion lift 看不出来。
+
+**落档位置 cross-reference**（共 4 处 anchor + 本 entry 即 5 处）：
+
+1. `src/loghetero/data/attack_templates/t1486_ransomware.py` 模块 docstring lines 38-46
+2. `src/loghetero/data/attack_templates/t1486_ransomware.py` 类 docstring lines 76-80
+3. Cycle F + Checkpoint 15 closure commit `1094df1` message body T1486 dedicated section
+4. `docs/CHECKPOINT_LOG.md` Phase 5 Checkpoint 15 entry "Placeholder notes 完整列表" section
+5. 本 entry（docs/known_issues.md::Phase 5 待办子节）
+
+**Checkpoint 16 完成后硬要求**：必须执行这条 single-pair sanity check 加结果（BERT-only F1 数字加是否 < 0.6 阈值通过）落 docs/PROGRESS.md 加 docs/CHECKPOINT_LOG.md。如果 BERT-only F1 ≥ 0.6 即未达预期降级 触发 RFC 评估是 anonymization 实施问题或 hard negative 模板设计问题或 T1486 模板设计问题不擅自归因。
+
 ### ALLOWED_EDGE_TRIPLES schema 扩展议程：registry 与 process-handle 边类型（2026-05-07，Checkpoint 14.5 RFC-14.5-1 触发）
 
 **触发原因**：Phase 4 / Checkpoint 14.5 RFC-14.5-1 决议（2026-05-07，user 拍板）中两个 TTP 模板的实施暴露了 `ALLOWED_EDGE_TRIPLES` schema 当前缺失的边类型：
