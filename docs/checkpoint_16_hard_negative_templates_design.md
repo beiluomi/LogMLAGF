@@ -145,14 +145,16 @@ User + 指导 Claude 联合裁定接受 Stage 1 propose：8 类扩展为 **10 �
 ### §3.7 Class #7 软件驱动安装（2 模板）
 
 **T#7.1 `benign_driver_install_printer`**
-- Sequence：(user, USER_LOGON, setup.exe) → (user, USER_PRIV_GRANT, setup.exe) → (setup.exe, FILE_WRITE, C:\Windows\System32\DriverStore\FileRepository\hp_printer.inf_amd64\hp_printer.sys) → (setup.exe, FILE_WRITE, C:\Windows\System32\drivers\hp_printer.sys) → (setup.exe, FILE_WRITE, \\.\pipe\svcctl) [register service] → (setup.exe, PROCESS_EXIT, setup.exe)
+- Sequence：(user, USER_LOGON, setup.exe) → (user, USER_PRIV_GRANT, setup.exe) → (setup.exe, FILE_WRITE, C:\Windows\System32\DriverStore\FileRepository\hp_printer.inf_amd64\hp_printer.sys) → (setup.exe, FILE_WRITE, C:\Windows\System32\drivers\hp_printer.sys) → (setup.exe, FILE_WRITE, \\.\pipe\svcctl) [register service via SCM RPC] → (setup.exe, FILE_WRITE, \Registry\Machine\SYSTEM\CurrentControlSet\Services\hp_printer\ImagePath) [IMAGEPATH registry write — registry-as-file workaround reuse from T1547.001 prior pattern, **Cycle G retro-write 2026-05-08 per Option B'**] → (setup.exe, PROCESS_EXIT, setup.exe)
 - Confound：T1547.006 kernel-modules-and-extensions / T1543.003 service-creation
-- Boundary：合法打印机驱动安装 **驱动来自 vendor signed binary**（path 含 DriverStore + .inf_amd64 anchor）+ service 不是 auto-start-network-listener。T1547.006 攻击驱动安装会把 .sys 直接写 drivers/ 不经 DriverStore + service binary 是 attacker payload。BERT-only 看 .sys + drivers + DriverStore 词频共享，区分必须靠 path semantics + binary-signing context。
+- Boundary：合法打印机驱动安装 **驱动来自 vendor signed binary**（path 含 DriverStore + .inf_amd64 anchor）+ service 不是 auto-start-network-listener。T1547.006 攻击驱动安装会把 .sys 直接写 drivers/ 不经 DriverStore + service binary 是 attacker payload。BERT-only 看 .sys + drivers + DriverStore 词频共享，区分必须靠 path semantics + binary-signing context。**IMAGEPATH 区分 anchor**（Cycle G Option B' 落档）：T#7.1 IMAGEPATH 指向 DriverStore-staged 的 vendor-signed binary（internal consistency）；T1543.003 attack template IMAGEPATH 指向 attacker-controlled payload binary（often outside System32 standard paths）。
 
 **T#7.2 `benign_driver_install_av_engine`**
 - Sequence：(user, USER_LOGON, av_installer.exe) → (user, USER_PRIV_GRANT, av_installer.exe) → (av_installer.exe, FILE_WRITE, C:\ProgramData\Vendor\Engine\engine.sys) → (av_installer.exe, FILE_WRITE, C:\Windows\System32\drivers\vendor_av.sys) → (av_installer.exe, FILE_WRITE, \\.\pipe\svcctl) → (av_installer.exe, NET_CONNECT, vendor_update_network) → (av_installer.exe, NET_RECV_NETWORK, vendor_update_network) [signature update]
 - Confound：T1543.003 windows-service / T1547.006 kernel-modules
 - Boundary：合法 AV driver 安装 **包含 vendor update domain network 而非 attacker C2**（vendor_update_network 是 well-known signature endpoint）加 service 是 known-AV-vendor name。BERT-only 看 .sys + drivers + service 词频共享，区分必须靠 network-destination domain reputation + service-name semantics。
+
+**Cycle G retro-write 2026-05-08 — IMAGEPATH 是 conditional anchor not universal driver install requirement**（per Option B' 裁定 + NEG-7.2 push verify Result B 即 verbatim §3.7 sketch 无 IMAGEPATH addition）：driver install 实际 sequence 取决于 service type。Printer driver（T#7.1）必须 IMAGEPATH for SCM registration 即 SCM 用 IMAGEPATH registry value 知道 driver service .sys binary 路径 pure svcctl pipe write 不足以 register service 这是 Windows real-world deployment fidelity。AV engine driver（T#7.2）不必须 IMAGEPATH 因 av engine 通常通过 different mechanism 比如 Filter Manager API 注册 minifilter driver 而非传统 service 模式 加 vendor update NET_CONNECT 已是 distinguishing anchor 不需要 IMAGEPATH。Cycle G implementation 期 NEG-7.1 implementer 发现此 design defect 并 silent 添加 IMAGEPATH 步触发 protocol violation；Option B' 裁定 accept additive 7-event sequence + retro-write design propose（本段）+ lessons explicit 落档（commit 07251b2 Block 6）+ tier 重新标 "Tier 2 协议违反 + design defect detected + retro-write 修复 + lessons 落档"。Future Cycle implementer 必须 NEEDS_CONTEXT 报 user + 指导 Claude 不允许 silent sequence addition。
 
 ### §3.8 Class #8 合法 RDP（2 模板）
 
@@ -396,7 +398,7 @@ User + 指导 Claude 联合裁定接受 Stage 1 propose：8 类扩展为 **10 �
 
 | 模板 | 需要的 edge triples | ALLOWED_EDGE_TRIPLES 覆盖 | 备注 |
 |---|---|---|---|
-| T#7.1 driver install printer | (user, USER_LOGON, process), (user, USER_PRIV_GRANT, process), (process, FILE_WRITE, file), (process, PROCESS_EXIT, process) | **Yes** all | 写驱动 .sys 是 FILE_WRITE 到 file node；svcctl pipe 写继承 #4 模式无 gap |
+| T#7.1 driver install printer | (user, USER_LOGON, process), (user, USER_PRIV_GRANT, process), (process, FILE_WRITE, file), (process, PROCESS_EXIT, process) | **Yes** all | 写驱动 .sys 是 FILE_WRITE 到 file node；svcctl pipe 写继承 #4 T1543.003 模式无 gap；**IMAGEPATH registry write 继承 T1547.001 registry-as-file pattern**（**Cycle G retro-write 2026-05-08 per Option B' 裁定**：T1547.001 是 prior workaround per known_issues.md line 411-427 Checkpoint 14.5 RFC-14.5-1 audit anchor；**注意此 pattern 不在 line 437-440 4-entry Cycle F inventory** 内 而是 Checkpoint 14.5 落地的 prior pattern reuse；NO new inventory entry triggered）|
 | T#7.2 driver install av engine | 同 T#7.1 + (process, NET_CONNECT, network), (process, NET_RECV_NETWORK, network) | **Yes** all | 无 gap |
 
 #### §5.8 Class #8 合法 RDP
