@@ -6,7 +6,12 @@ Cross-reference:
     docs/checkpoint_16_hard_negative_templates_design.md §3.7 minimal sketch
     + §5.7 schema readiness (USER_PRIV_GRANT user-subject reuses T1068
     workaround #2; svcctl pipe write reuses T1543.003 sc.exe pattern;
-    driver-registry write reuses T1547.001 registry-as-file pattern).
+    no T1547.001 registry-as-file reuse — NEG-7.2 verbatim §3.7 sketch
+    无 IMAGEPATH registry write per Result B push verify per
+    service-type-specific conditional anchor finding cf. NEG-7.1 line
+    286-288 includes IMAGEPATH FILE_WRITE for printer driver SCM
+    registration whereas NEG-7.2 av engine driver uses Filter Manager
+    API minifilter registration not requiring IMAGEPATH).
 
 ATT&CK-like NEG-ID:
     NEG-7.2 — second of two software-driver-install hard-negative templates.
@@ -73,14 +78,17 @@ ALLOWED_EDGE_TRIPLES workaround reuse:
          already-landed pattern from T1543.003 attack template (svcctl
          RPC modeled as pipe-as-file). NO new inventory entry triggered.
 
-      3. **Driver staging-path FILE_WRITE reuses T1547.001 file-as-file
-         pattern**. NEG-7.2 does not write a registry key explicitly (the
-         vendor's SCM call sets ImagePath internally) — only standard
-         FILE_WRITE to vendor staging path + drivers/<file>.sys. Both are
-         (process, FILE_WRITE, file) triples natively in
-         ALLOWED_EDGE_TRIPLES. Listed for parity with NEG-7.1 documentation
-         even though NEG-7.2 does not invoke the registry-as-file
-         workaround in this 7-event variant.
+      3. **Item 3 (T1547.001 registry-as-file reuse) does NOT apply to
+         NEG-7.2**. NEG-7.2 verbatim §3.7 7-event sequence 无 IMAGEPATH
+         registry write event. Driver staging-path FILE_WRITE + drivers
+         directory FILE_WRITE 都是 standard (process, FILE_WRITE, file)
+         triples natively in ALLOWED_EDGE_TRIPLES 不构成 workaround
+         pattern. Vendor AV typically uses Filter Manager API minifilter
+         driver registration mechanism 不需 IMAGEPATH for SCM (cf.
+         NEG-7.1 printer driver T#7.1 service type which DOES require
+         IMAGEPATH). 此 Item 3 omission 是 service-type-specific
+         conditional anchor finding (design propose §3.7 line 157
+         Cycle G retro-write) 应用 to Result B push verify outcome.
 
     All triples used by T#7.2 are natively in ALLOWED_EDGE_TRIPLES
     (parsers/base.py lines 106-141):
